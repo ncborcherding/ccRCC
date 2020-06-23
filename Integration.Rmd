@@ -1,0 +1,39 @@
+---
+title: Integration of multiple experiments for the ccRCC project
+author: 
+- name: Nick Borcherding
+  email: ncborch@gmail.com
+  affiliation: Washington University in St. Louis, School of Medicine, St. Louis, MO, USA
+date: "June 23, 2020"
+output:
+  BiocStyle::html_document:
+    toc_float: true
+
+---
+
+```{r, echo=FALSE, results="hide", message=FALSE}
+knitr::opts_chunk$set(error=FALSE, message=FALSE, warning=FALSE)
+library(BiocStyle)
+```
+
+
+# Loading Libraries
+
+In general I like to load libraries here that we will use universally, and then call other libraries when we need them in the code chunks that are relevant. 
+
+```{r}
+suppressPackageStartupMessages(library(Seurat))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(dplyr))
+```
+
+I also like to set a color palette before I begin - this way all the colors are consistent throughout the publication figures.
+
+```{r setup, include=FALSE}
+colorblind_vector <- colorRampPalette(c("#FF4B20", "#FFB433", "#C6FDEC", "#7AC5FF", "#0348A6"))
+```
+
+
+
+
+
