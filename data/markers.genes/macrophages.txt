@@ -1,8 +1,8 @@
 Itgam
 Adgre1
-Fcgr1
-Fcgr3
-Fcgr2
+Fcgr1A
+Fcgr3A
+Fcgr2B
 Ptprc
 Cd163
 Lilra5
@@ -30,3 +30,4 @@ Csf1r
 Cx3cr1
 Adgre1
 Cd68
+CD14

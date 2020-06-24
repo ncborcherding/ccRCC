@@ -69,7 +69,7 @@ colnames(x = P2_T) <- stringr::str_remove(colnames(x = P2_T), "-1")
 P2_T <- CreateSeuratObject(P2_T)
 
 P3_P <- Read10X("data/ccRCC/GU0715/Peripheral/")
-colnames(x = P3_P) <- paste('P2_P', colnames(x = P3_P), sep = '_')
+colnames(x = P3_P) <- paste('P3_P', colnames(x = P3_P), sep = '_')
 colnames(x = P3_P) <- stringr::str_remove(colnames(x = P3_P), "-1")
 P3_P <- CreateSeuratObject(P3_P)
 
@@ -139,7 +139,7 @@ integrated <- FindNeighbors(object = integrated, dims = 1:40, force.recalc = T)
 integrated <- FindClusters(object = integrated, resolution = 0.6, force.recalc=T)
 ```
 
-## Using Canonical Immune Markers to Isolate Populations
+## Using Canonical Immune Markers to Isolate Immune Populations
 ```{r}
 dir.create("DataAnalysis/")
 dir.create("DataAnalysis/GSE131685")
@@ -168,6 +168,7 @@ immune.cells <- DietSeurat(immune.cells, assays = "RNA")
 
 ```{r}
 normalKidney <- SplitObject(immune.cells, split.by = "orig.ident")
+saveRDS(normalKidney, file = "./data/Processed/KidneyImmuneList.rds")
 rm(immune.cells)
 rm(integrated)
 ```
@@ -310,7 +311,7 @@ ggsave(path = "DataAnalysis/UMAP", filename="ClusterBreakdown_byType_Scake.pdf",
 
 # Identifying subtypes
 
-## Differential Gene Expression
+## Method 1: Differential Gene Expression
 
 The first step for me is to always look at major markers across clusters, so I will make a folder for differential gene expression (DGE), normalize the *RNA* data, and then use the **FindAllMarkers()** function. This is a generalized function for finding positively expressed genes by cluster (large amount of default filtering will remain intact for now). *Importanly*, RNA data needs to be used over the integrated or sct data as this the former is a reflection of true expression and the latter are values to help with the 2D representation in the UMAP.
 
@@ -384,7 +385,7 @@ for (i in seq_along(marker_list)) {
     }
 }
 ```
-## Singler
+## Method 2: Singler
 
 Singler is a very cool package: it uses large cohorts of isolated bulk sequencing to correlate with single-cell data and makes ID-ing the cell type really intuitive. It allegedly works with Seurat, but I am not the largest fan of its work, so I have made some customization to help.
 
@@ -512,6 +513,178 @@ SingleR.DrawHeatmap2(singler$singler[[2]]$SingleR.single.main, top.n = 15, clust
 dev.off()
 ```
 
-***
+## Method 3: Attaching TCR data
 
-#Assigning Major Cell Types
+A major issue in the differentiation of cell types is the difference between NK cells and T cells, with a lot of crossover between Th1/CTL expression in the latter. One clear way to differentiate is to use our VDJ seequencing data to identify clusters with prominant TCR recovery. From there, we can say these are more definitively T cells. 
+
+```{r}
+library(scRepertoire)
+```
+
+### Loading the VDJ data
+```{r}
+P1_P_contigs <- read.csv("./data/VDJ/P_700_contigs.csv")
+P1_T_contigs <- read.csv("./data/VDJ/T_700_contigs.csv")
+P2_P_contigs <- read.csv("./data/VDJ/P_744_contigs.csv")
+P2_T_contigs <- read.csv("./data/VDJ/T_744_contigs.csv")
+P3_P_contigs <- read.csv("./data/VDJ/P_715_contigs.csv")
+P3_T_contigs <- read.csv("./data/VDJ/T_715_contigs.csv")
+N1_P_contigs <- read.csv("./data/VDJ/vdj_v1_hs_pbmc_t_filtered_contig_annotations.csv")
+```
+
+### Matching the Seurat and Contig Barcodes
+
+New integration steps for Seurat have made this a little more tricky - the integration adds a _Number to the end of each sample in the Seurat object - we will need to remove this first.
+
+```{r}
+list <- list(P1_P_contigs, P1_T_contigs, P2_P_contigs, P2_T_contigs, P3_P_contigs, P3_T_contigs, N1_P_contigs)
+
+#Remove the -1 from the end of the barcodes
+for (i in seq_along(list)) {
+  list[[i]][,"barcode"] <- stringr::str_remove(list[[i]][,"barcode"], "-1")
+}
+
+#Remove Prefixes of the ccRCC samples
+for (i in 1:6) {
+  list[[i]][,"barcode"] <- stringr::str_split(list[[i]][,"barcode"], "_", simplify = T)[,3]
+}
+```
+
+### Organizing TCR data and adding to the Seurat meta data
+```{r}
+combined <- combineTCR(list, samples = c("P1", "P1", "P2", "P2", "P3", "P3", "N1"), ID = c("P", "T", "P", "T", "P", "T", "P"), cells = "T-AB")
+integrated <- combineExpression(combined, integrated)
+```
+
+
+```{r}
+#Organizing the order of the factor cloneType
+data@meta.data$cloneType <- factor(data@meta.data$cloneType, levels = c("Hyperexpanded (100 < X <= 500)", "Large (20 < X <= 100)", "Medium (5 < X <= 20)", "Small (1 < X <= 5)", "Single (0 < X <= 1)", NA))
+update_geom_defaults("point", list(stroke=0.5))
+DimPlot(integrated, group.by = "cloneType") + scale_color_manual(values = c(colorblind_vector(5)), na.value="grey")
+ggsave(path = "DataAnalysis/UMAP", filename="IntegratedObject_byClonotypeFreq.eps", width=6.5, height=3)
+```
+
+*** 
+
+# Assigning Major Cell Types
+
+Based on the 3 different methods, there it appears that there needs to be manual edits to the cluster assignments. Specifically two clusters (9 and 10) have subpopulations with TCR recovered. We can edit these manually using the CellSelector() from Seurat. This needs to be run in the console and use the plot function of Rstudio.
+
+```{r, eval=F}
+plot <- DimPlot(integrated, reduction = "umap")
+sc10.cells <- CellSelector(plot=plot)
+
+
+sc9.cells <- CellSelector(plot=plot)
+meta <- integrated[[]]
+meta <- meta[rownames(meta) %in% sc9.cells, ]
+meta <- subset(meta, !is.na(cloneType))
+sc9.cells <- rownames(meta)
+
+Idents(integrated, cells = sc10.cells) <- 23
+Idents(integrated, cells = sc9.cells) <- 24
+```
+
+Now we can regraph some of the previous visualization and write over the former versions with the newer cluster assignments.
+
+```{r}
+integrated@meta.data$Final_clusters <- Idents(integrated)
+integrated@active.ident <- factor(integrated@active.ident, levels = 0:24)
+
+update_geom_defaults("point", list(size=1, alpha =1, stroke = 0.1))
+DimPlot(object = integrated, reduction = 'umap', label = T) + NoLegend()
+ggsave(path = "DataAnalysis/UMAP", filename="IntegratedObject_byCluster.eps", width=3.5, height=3)
+
+meta <- integrated[[]]
+freq_table <- meta  %>% 
+  group_by(sample, type, seurat_clusters)  %>% 
+  summarise(n=n())
+
+ggplot(freq_table, aes(x=seurat_clusters, y=n, fill = type)) + 
+  stat_summary(geom="bar", position = "fill") + 
+  theme_classic()
+ggsave(path = "DataAnalysis/UMAP", filename="ClusterBreakdown_byType_unscaled.pdf", width=4, height=2)
+
+ggplot(freq_table, aes(x=seurat_clusters, y=n, fill = sample)) + 
+  stat_summary(geom="bar", position = "fill") + 
+  theme_classic()
+ggsave(path = "DataAnalysis/UMAP", filename="ClusterBreakdown_bySample_unscaled.pdf", width=4, height=2)
+
+freq_table <- table(meta$seurat_clusters, meta$type)
+for (i in 1:ncol(freq_table)) {
+  freq_table[,i] <- freq_table[,i]/sum(freq_table[,i])
+}
+freq_table <- reshape2::melt(freq_table)
+
+ggplot(freq_table, aes(x=as.factor(Var1), y=value, fill = Var2)) + 
+  geom_bar(stat="identity", position = "fill") + 
+  theme_classic()
+ggsave(path = "DataAnalysis/UMAP", filename="ClusterBreakdown_byType_Scale.pdf", width=4, height=2)
+
+freq_table <- table(meta$seurat_clusters, meta$sample)
+for (i in 1:ncol(freq_table)) {
+  freq_table[,i] <- freq_table[,i]/sum(freq_table[,i])
+}
+freq_table <- reshape2::melt(freq_table)
+
+ggplot(freq_table, aes(x=as.factor(Var1), y=value, fill = Var2)) + 
+  geom_bar(stat="identity", position = "fill") + 
+  theme_classic()
+ggsave(path = "DataAnalysis/UMAP", filename="ClusterBreakdown_bySample_Scale.pdf", width=4, height=2)
+```
+
+```{r}
+library(SingleR)
+Average <- AverageExpression(integrated, assay = "RNA", return.seurat = T)
+expr_matrix <- as.matrix(Average@assays$RNA@counts[,names(Average@active.ident)])
+gene_annotation <- data.frame(row.names=rownames(expr_matrix), gene_short_name=rownames(expr_matrix))
+
+singler = CreateSinglerObject(expr_matrix, project.name = "Myo", annot = NULL, min.genes = 200,
+  technology = "10X", species = "Mouse", ref.list = list(), normalize.gene.length = F, variable.genes = "de",
+  fine.tune = T, do.signatures = F, do.main.types = T, 
+  reduce.file.size = T, numCores =4)
+  
+singler$seurat = Average 
+
+pdf("./DataAnalysis/SingleR/CellTypes_complex2.pdf")
+SingleR.DrawHeatmap2(singler$singler[[2]]$SingleR.single, top.n = 50, clusters = singler$singler[[2]]$SingleR.single$cell.names, order.by.clusters = F, 
+color = rev(colorblind_vector(50)), normalize = T)
+dev.off()
+
+pdf("./DataAnalysis/SingleR/CellTypes_complex1.pdf")
+SingleR.DrawHeatmap2(singler$singler[[1]]$SingleR.single, top.n = 50, clusters = singler$singler[[1]]$SingleR.single$cell.names, order.by.clusters = F, normalize = T)
+dev.off()
+
+pdf("./DataAnalysis/SingleR/CellTypes_simple1.pdf")
+SingleR.DrawHeatmap2(singler$singler[[1]]$SingleR.single.main, top.n = 15, clusters = singler$singler[[1]]$SingleR.single$cell.names, order.by.clusters = F, normalize = T)
+dev.off()
+
+pdf("./DataAnalysis/SingleR/CellTypes_simple2.pdf")
+SingleR.DrawHeatmap2(singler$singler[[2]]$SingleR.single.main, top.n = 15, clusters = singler$singler[[2]]$SingleR.single$cell.names, order.by.clusters = F, normalize = T) 
+dev.off()
+```
+
+```{r}
+saveRDS(integrated, file = "./data/Processed/integrated_Cluster.rds")
+```
+
+
+```{r}
+cellAssign <- read.delim("./data/ccRCC_cellAssign.txt")
+meta <- integrated[[]]
+meta$barcode <-  rownames(meta)
+meta <- merge(meta, cellAssign, by.x = "Final_clusters", by.y="Cluster")
+add <- meta[,c("Major", "Minor")]
+rownames(add) <- meta$barcode
+integrated <- AddMetaData(integrated, add)
+```
+
+```{r}
+DimPlot(object = integrated, reduction = 'umap', label = T, group.by = "Major")
+ggsave(path = "DataAnalysis/UMAP", filename="IntegratedObject_byMajorCellType.eps", width=4, height=3)
+
+DimPlot(object = integrated, reduction = 'umap', group.by = "Minor")
+ggsave(path = "DataAnalysis/UMAP", filename="IntegratedObject_byMinorCellType.eps", width=4.5, height=3)
+```
+
