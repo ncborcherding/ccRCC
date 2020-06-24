@@ -33,7 +33,485 @@ I also like to set a color palette before I begin - this way all the colors are 
 colorblind_vector <- colorRampPalette(c("#FF4B20", "#FFB433", "#C6FDEC", "#7AC5FF", "#0348A6"))
 ```
 
+## Normal PBMC
+
+Loading the 10x normal healthy PBMCs - the following series with put "N1_P_" as the prefix on the barcodes and remove the -1. The first step is important as we combine the data to form unique barcodes, the second is pure aethetics. 
+
+```{r}
+N1_P<-  Read10X("data/10x_PBMC/")
+colnames(x = N1_P) <- paste('N1_P', colnames(x = N1_P), sep = '_')
+colnames(x = N1_P) <- stringr::str_remove(colnames(x = N1_P), "-1")
+N1_P <- CreateSeuratObject(N1_P)
+```
+
+## Peripheral and Tumor Immune Cell Populations from ccRCC
+
+We will perform the same process for the renal tumor samples, loading both the patient peripheral (P) and tumor-infiltrating (T), immune populations
+```{r}
+P1_P <- Read10X("data/ccRCC/GU0700/Peripheral/")
+colnames(x = P1_P) <- paste('P1_P', colnames(x = P1_P), sep = '_')
+colnames(x = P1_P) <- stringr::str_remove(colnames(x = P1_P), "-1")
+P1_P <- CreateSeuratObject(P1_P)
+
+P1_T <- Read10X("data/ccRCC/GU0700/Tumor/")
+colnames(x = P1_T) <- paste('P1_T', colnames(x = P1_T), sep = '_')
+colnames(x = P1_T) <- stringr::str_remove(colnames(x = P1_T), "-1")
+P1_T <- CreateSeuratObject(P1_T)
+
+P2_P <- Read10X("data/ccRCC/GU0744/Peripheral/")
+colnames(x = P2_P) <- paste('P2_P', colnames(x = P2_P), sep = '_')
+colnames(x = P2_P) <- stringr::str_remove(colnames(x = P2_P), "-1")
+P2_P <- CreateSeuratObject(P2_P)
+
+P2_T <- Read10X("data/ccRCC/GU0744/Tumor/")
+colnames(x = P2_T) <- paste('P2_T', colnames(x = P2_T), sep = '_')
+colnames(x = P2_T) <- stringr::str_remove(colnames(x = P2_T), "-1")
+P2_T <- CreateSeuratObject(P2_T)
+
+P3_P <- Read10X("data/ccRCC/GU0715/Peripheral/")
+colnames(x = P3_P) <- paste('P2_P', colnames(x = P3_P), sep = '_')
+colnames(x = P3_P) <- stringr::str_remove(colnames(x = P3_P), "-1")
+P3_P <- CreateSeuratObject(P3_P)
+
+P3_T <- Read10X("data/ccRCC/GU0715/Tumor/")
+colnames(x = P3_T) <- paste('P3_T', colnames(x = P3_T), sep = '_')
+colnames(x = P3_T) <- stringr::str_remove(colnames(x = P3_T), "-1")
+P3_T <- CreateSeuratObject(P3_T)
+```
+## Whole kidney Single-cell RNA sequencing 
+This study ([link to accession](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE131685)) has single-cell sequencing of both renal tissue and immunce cells from 3 healthy donors
+
+*Summary:*	**A comprehensive cellular anatomy of normal human kidney is crucial to address the cellular origins of renal disease and renal cancer. Some kidney diseases may be cell type-specific, especially renal tubular cells. To investigate the classification and transcriptomic information of human kidney, we performed a method to obtain single-cell suspension of kidney rapidly, and conducted single-cell RNA sequencing (scRNA-seq). We present scRNA-seq data of 23,366 high quality cells from human kidneys of 3 donors. In this dataset, we show 10 clusters of normal human renal cells. Due to the high quality of single cell transcriptomic information, proximal tubule (PT) cells were classified into 3 subtypes and collecting ducts cells into 2 subtypes. Collectively, our data will provide a reliable reference for the studies of renal cell biology and kidney diseases.**
+
+```{r}
+N2_K <- Read10X("data/GSE131685_RAW/Kidney1/")
+colnames(x = N2_K) <- paste('N2_K', colnames(x = N2_K), sep = '_')
+colnames(x = N2_K) <- stringr::str_remove(colnames(x = N2_K), "-1")
+N2_K <- CreateSeuratObject(N2_K)
+
+N3_K <- Read10X("data/GSE131685_RAW/Kidney2/")
+colnames(x = N3_K) <- paste('N3_K', colnames(x = N3_K), sep = '_')
+colnames(x = N3_K) <- stringr::str_remove(colnames(x = N3_K), "-1")
+N3_K <- CreateSeuratObject(N3_K)
+
+N4_K <- Read10X("data/GSE131685_RAW/Kidney3/")
+colnames(x = N4_K) <- paste('N4_K', colnames(x = N4_K), sep = '_')
+colnames(x = N4_K) <- stringr::str_remove(colnames(x = N4_K), "-1")
+N4_K <- CreateSeuratObject(N4_K)
+```
+
+***
+
+#Isolate Immune Cells from normal kidney.
+
+Before we integrate all the samples, we will need to isolate the immune cells from the normal kidney runs:
+
+```{r}
+options(future.globals.maxSize= 2621440000) #Need this to transfer transformation so increasing from 500 Mb to 2.5 Gb - math: 2500*1024^2 bytes
+
+list <- list(N2_K, N3_K, N4_K)
+
+for (i in 1:length(list)) {
+    list[[i]] <-  suppressMessages(SCTransform(list[[i]], verbose = FALSE))
+}
+
+select.features <- SelectIntegrationFeatures(object.list = list, nfeatures = 3000)
+list <- PrepSCTIntegration(object.list = list, anchor.features = select.features, 
+    verbose = FALSE)
+
+#rm(list = c("H1","H2","S1","S2")) #Saving Memory
+
+anchors <- FindIntegrationAnchors(object.list = list, normalization.method = "SCT", 
+    anchor.features = select.features, verbose = FALSE)
+integrated <- IntegrateData(anchorset = anchors, normalization.method = "SCT", 
+    verbose = FALSE)
+rm(list)
+rm(anchors)
+```
+
+## Integrating the normal kidney samples using default parameters.
+```{r}
+integrated <- ScaleData(object = integrated, verbose = FALSE)
+integrated <- RunPCA(object = integrated, npcs = 40, verbose = FALSE)
+integrated <- RunUMAP(object = integrated, reduction = "pca", 
+    dims = 1:30)
+integrated <- FindNeighbors(object = integrated, dims = 1:40, force.recalc = T)
+integrated <- FindClusters(object = integrated, resolution = 0.6, force.recalc=T)
+```
+
+## Using Canonical Immune Markers to Isolate Populations
+```{r}
+dir.create("DataAnalysis/")
+dir.create("DataAnalysis/GSE131685")
+update_geom_defaults("point", list(stroke=0.1))
+DimPlot(object = integrated, reduction = 'umap', label = T) + NoLegend()
+ggsave(path = "DataAnalysis/GSE131685", filename="GSE131685_UMAP_byCluster.eps", width=3.5, height=3)
+
+DimPlot(object = integrated, reduction = 'umap', label = F, group.by = "orig.ident") + NoLegend()
+ggsave(path = "DataAnalysis/GSE131685", filename="GSE131685_UMAP_bySample.eps", width=4, height=3)
+
+
+genelist <- c("CD3D", "CD3G", "CD4", "CD8A", "CD8B", "SELL", "CCR7", "FOXP3", "IL2RA", "IL7R", "CD9", "SDC1", "CD79A", "NCAM1", "NKG7", "CD14", "CD86", "CD80", "CLEC9A", "ITGAX", "ITGAM", "ITGAE", "MS4A1", "PTPRC")
+DefaultAssay(integrated) <- "RNA"
+for (i in 1:length(genelist)) {
+FeaturePlot(object =integrated, features = genelist[i], ncol = 1, min.cutoff="q10",max.cutoff="q90") + NoLegend() + NoGrid() + NoAxes() + scale_color_gradientn(colors = rev(colorblind_vector(13)))
+ggsave(path = "DataAnalysis/GSE131685", filename=paste("GSE131685_", genelist[i], ".pdf", sep=""), width=3.5, height=3)
+}
+```
+
+Based on the expression pattern differences, we will subset the data from 3 clusters - cluster 8 (T Cells), cluster 9 (APCs), and cluster 14 (B cells) and then we call DietSeurat() to just isolate the RNA data so we can now perform the intergation across all samples.
+
+```{r}
+immune.cells <- subset(integrated, idents = c(8,9,14))
+immune.cells <- DietSeurat(immune.cells, assays = "RNA")
+```
+
+```{r}
+normalKidney <- SplitObject(immune.cells, split.by = "orig.ident")
+rm(immune.cells)
+rm(integrated)
+```
+
+***
+
+# Integrating all the samples
+
+Much in the same way we performed the integration of the normal kidney samples above, we will also do this now across the the single-cell immune samples, by first creating a list and then passing that list for SCT transformation and integration.
+
+```{r}
+options(future.globals.maxSize= 4194304000) #Need this to transfer transformation so increasing from 500 Mb to 4 Gb - math: 4000*1024^2 bytes
+
+list <- list(P1_P, P1_T, P2_P, P2_T, P3_P, P3_T, N1_P, normalKidney[[1]], normalKidney[[2]], normalKidney[[3]])
+
+for (i in 1:length(list)) {
+    list[[i]] <-  suppressMessages(SCTransform(list[[i]], verbose = FALSE))
+}
+
+select.features <- SelectIntegrationFeatures(object.list = list, nfeatures = 3000)
+list <- PrepSCTIntegration(object.list = list, anchor.features = select.features, 
+    verbose = FALSE)
 
 
 
+anchors <- FindIntegrationAnchors(object.list = list, normalization.method = "SCT", 
+    anchor.features = select.features, verbose = FALSE)
+integrated <- IntegrateData(anchorset = anchors, normalization.method = "SCT", 
+    verbose = FALSE)
+rm(list)
+rm(anchors)
 
+dir.create("data/Processed")
+saveRDS(integrated, file = "data/Processed/integrated_PreClustering.rds")
+```
+
+The UMAP visualizations can be difficult to interpret, before I select my parameters, I like to run a long loops to test the various principal components and dimensions to select. This is not particularly elegant, but is better than assuming set dimensions of the vignettes. I am not going to include the folder below in the github repo - its about 800 graphs and not helpful beyond the initial steps. 
+
+```{r eval=FALSE}
+dir.create("DataAnalysis/DimensionInputs")
+for (i in c(10,15,20,25,30,35,40)) {
+    
+    integrated2 <- ScaleData(object = integrated, verbose = FALSE)
+    integrated2 <- RunPCA(object = integrated2, npcs = 40, verbose = FALSE)
+    integrated2 <- RunUMAP(object = integrated2, reduction = "pca", 
+        dims = 1:i) #dimensions for  UMAP
+    for (x in c(10,15,20,25,30,35,40)) { #Dimensions for neighbors
+       integrated2 <- FindNeighbors(object = integrated2, dims = 1:x)
+       for(y in c(0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1)) { #Resolution
+           integrated2 <- FindClusters(object = integrated2, resolution = y, force.recalc=T)
+           plot1 <- DimPlot(integrated2, reduction = "umap", pt.size = 0.5, group.by = "orig.ident")
+           ggsave(path = "DataAnalysis/DimensionInputs", file = paste("UMAP", i, "_Neighbors", x, "_resolution", y, "_OrigIdent.pdf", sep=""), plot1, width=4.25, height=3)
+           plot2 <- DimPlot(object = integrated2, reduction = 'umap', label = T) + NoLegend()
+            ggsave(path = "DataAnalysis/DimensionInputs", file = paste("UMAP", i, "_Neighbors", x, "_resolution", y, "_clusters.pdf", sep=""), plot2, width=3.5, height=3)
+       }
+    }
+}
+rm(integrated2)
+```
+
+Based on the review of the output, we will use the following parameters:
+
++  UMAP 30
++  Neighbors 40
++  Resolution 0.7
+
+```{r}
+integrated <- ScaleData(object = integrated, verbose = FALSE)
+integrated <- RunPCA(object = integrated, npcs = 40, verbose = FALSE)
+integrated <- RunUMAP(object = integrated, reduction = "pca", 
+    dims = 1:30)
+integrated <- FindNeighbors(object = integrated, dims = 1:40, force.recalc = T)
+integrated <- FindClusters(object = integrated, resolution = 0.7, force.recalc=T)
+
+
+dir.create("DataAnalysis/UMAP")
+update_geom_defaults("point", list(stroke=0.1))
+DimPlot(object = integrated, reduction = 'umap', label = T, ) + NoLegend()
+ggsave(path = "DataAnalysis/UMAP", filename="IntegratedObject_byCluster.eps", width=3.5, height=3)
+DimPlot(object = integrated, reduction = 'umap', group.by = "orig.ident") 
+ggsave(path = "DataAnalysis/UMAP", filename="IntegratedObject_byOrig.Ident.eps", width=3.75, height=3)
+```
+Adding the type of cell (or the orign) where K is normal kidney parenychma, P is peripheral blood and T is Tumor
+```{r}
+x <- rownames(integrated[[]])
+x <- as.data.frame(stringr::str_split(x, "_", simplify = T))
+
+x <- x[,1:2]
+colnames(x) <- c("sample", "type")
+rownames(x) <- rownames(integrated[[]])
+integrated <- AddMetaData(integrated, x)
+
+DimPlot(object = integrated, reduction = 'umap', group.by = "type") 
+ggsave(path = "DataAnalysis/UMAP", filename="IntegratedObject_byType.eps", width=3.75, height=3)
+
+saveRDS(integrated, file = "data/Processed/integrated_Cluster.rds")
+```
+
+#####We can also look at the proportion of cluster formed from individual samples and types.
+
+```{r}
+meta <- integrated[[]]
+freq_table <- meta  %>% 
+  group_by(sample, type, seurat_clusters)  %>% 
+  summarise(n=n())
+
+ggplot(freq_table, aes(x=seurat_clusters, y=n, fill = type)) + 
+  stat_summary(geom="bar", position = "fill") + 
+  theme_classic()
+ggsave(path = "DataAnalysis/UMAP", filename="ClusterBreakdown_byType_unscaled.pdf", width=3, height=2)
+
+ggplot(freq_table, aes(x=seurat_clusters, y=n, fill = sample)) + 
+  stat_summary(geom="bar", position = "fill") + 
+  theme_classic()
+ggsave(path = "DataAnalysis/UMAP", filename="ClusterBreakdown_bySample_unscaled.pdf", width=3, height=2)
+
+freq_table <- table(meta$seurat_clusters, meta$type)
+for (i in 1:ncol(freq_table)) {
+  freq_table[,i] <- freq_table[,i]/sum(freq_table[,i])
+}
+freq_table <- reshape2::melt(freq_table)
+
+ggplot(freq_table, aes(x=Var1, y=value, fill = Var2)) + 
+  geom_bar(stat="identity", position = "fill") + 
+  theme_classic()
+ggsave(path = "DataAnalysis/UMAP", filename="ClusterBreakdown_byType_Scake.pdf", width=3, height=2)
+
+freq_table <- table(meta$seurat_clusters, meta$sample)
+for (i in 1:ncol(freq_table)) {
+  freq_table[,i] <- freq_table[,i]/sum(freq_table[,i])
+}
+freq_table <- reshape2::melt(freq_table)
+
+ggplot(freq_table, aes(x=Var1, y=value, fill = Var2)) + 
+  geom_bar(stat="identity", position = "fill") + 
+  theme_classic()
+ggsave(path = "DataAnalysis/UMAP", filename="ClusterBreakdown_byType_Scake.pdf", width=3, height=2)
+```
+
+
+# Identifying subtypes
+
+## Differential Gene Expression
+
+The first step for me is to always look at major markers across clusters, so I will make a folder for differential gene expression (DGE), normalize the *RNA* data, and then use the **FindAllMarkers()** function. This is a generalized function for finding positively expressed genes by cluster (large amount of default filtering will remain intact for now). *Importanly*, RNA data needs to be used over the integrated or sct data as this the former is a reflection of true expression and the latter are values to help with the 2D representation in the UMAP.
+
+```{r eval=FALSE}
+dir.create("DataAnalysis/DGE")
+integrated <- NormalizeData(integrated, assay = "RNA")
+All.markers <- FindAllMarkers(integrated, assay = "RNA", pseudocount.use = 0.1, only.pos = T) 
+write.table(All.markers, file = "./DataAnalysis/DGE/FindAllMarkers_output.txt", col.names=NA, sep="\t",append=F)
+```
+
+
+```{r}
+suppressPackageStartupMessages(library(schex))
+integrated <- make_hexbin(integrated, 80, dimension_reduction = "UMAP")
+```
+
+```{r}
+All.markers <- read.delim("./DataAnalysis/DGE/FindAllMarkers_output.txt")
+top10 <- All.markers %>% group_by(cluster) %>% top_n(n = 10, wt = avg_logFC)
+top10 <- top10$gene #just want the IDs
+
+DefaultAssay(integrated) <- "RNA"
+dir.create("DataAnalysis/UMAP/TopClusterMarkers")
+for (i in seq_along(top10)) {
+        if (length(which(rownames(integrated@assays$RNA@counts) == top10[i])) == 0){
+            next() #Need to loop here because plot_hexbin_feature() does not have a built-in function to deal with absence of selected gene
+        } else {
+    plot <- plot_hexbin_feature(integrated, feature = top10[i], type = "counts", action = "prop_0")+ 
+             guides(fill=F, color = F) + 
+                scale_fill_gradientn(colors = rev(colorblind_vector(13))) 
+        ggsave(path = "DataAnalysis/UMAP/TopClusterMarkers", file = paste0("Top5markers", "_", top10[i], "_prop.pdf"), plot, height=3, width=3.25)
+        }
+  }
+
+```
+### Lineage Markers Provided in the Dropbox account
+
+#### Loading and organizing the markers
+
+```{r}
+dir.create("DataAnalysis/UMAP/LineageMarkers")
+
+file_list <- list.files("./data/markers.genes")
+file_list <- file_list[grepl(".txt", file_list)]
+files <- file.path(paste0("./data/markers.genes/", file_list))
+
+marker_list <- list()
+for (i in 1:length(files)) {
+    marker_list[[i]] <- read.delim(files[i], col.names = FALSE)
+    marker_list[[i]] <- toupper(unlist(marker_list[[i]]))
+}
+names <- stringr::str_remove(file_list, ".txt")
+names(marker_list) <- names
+```
+
+#### Graphing all the genes
+```{r}
+DefaultAssay(integrated) <- "RNA"
+
+for (i in seq_along(marker_list)) {
+    tmp <- as.character(unlist(marker_list[i]))
+    for (j in seq_along(tmp)) {
+        if (length(which(rownames(integrated@assays$RNA@counts) == tmp[j])) == 0){
+            next() #Need to loop here because plot_hexbin_feature() does not have a built-in function to deal with absence of selected gene
+        } else {
+        plot <- plot_hexbin_feature(integrated, feature = tmp[j], type = "counts", action = "prop_0")+ 
+             guides(fill=F, color = F) + 
+                scale_fill_gradientn(colors = rev(colorblind_vector(13))) 
+        ggsave(path = "DataAnalysis/UMAP/LineageMarkers", file = paste0(names(marker_list)[i], "_", tmp[j], "_prop.pdf"), plot, height=3, width=3.25)
+        }
+    }
+}
+```
+## Singler
+
+Singler is a very cool package: it uses large cohorts of isolated bulk sequencing to correlate with single-cell data and makes ID-ing the cell type really intuitive. It allegedly works with Seurat, but I am not the largest fan of its work, so I have made some customization to help.
+
+As opposed to calculating the signatures across every single cell, the first step is to calculate mean expression by cluster using the **AverageExpression()** function in Seurat. Then we will make an expression matrix and load that into the **CreateSinglerObject()** function.
+
+```{r}
+library(SingleR)
+Average <- AverageExpression(integrated, assay = "RNA", return.seurat = T)
+expr_matrix <- as.matrix(Average@assays$RNA@counts[,names(Average@active.ident)])
+gene_annotation <- data.frame(row.names=rownames(expr_matrix), gene_short_name=rownames(expr_matrix))
+```
+
+*Warning:* This is not the greatest call function, sometimes when I delete the defaults the function stops working, so some of these seem random, but they're there for sanity
+
+```{r include=FALSE}
+singler = CreateSinglerObject(expr_matrix, project.name = "Myo", annot = NULL, min.genes = 200,
+  technology = "10X", species = "Mouse", ref.list = list(), normalize.gene.length = F, variable.genes = "de",
+  fine.tune = T, do.signatures = F, do.main.types = T, 
+  reduce.file.size = T, numCores =4)
+  
+singler$seurat = Average 
+```
+
+```{r}
+library(pheatmap)
+library(Rfast)
+SingleR.DrawHeatmap2 = function(SingleR,cells.use = NULL, types.use = NULL,
+                               clusters=NULL,top.n=40,normalize=F,
+                               order.by.clusters=F,cells_order=NULL,silent=F,
+                               fontsize_row=9,...) {
+    scores = SingleR$scores
+  if (!is.null(cells.use)) {
+    scores = scores[cells.use,]
+  }
+  if (!is.null(types.use)) {
+    scores = scores[,types.use]
+  }
+  
+  m = apply(t(scale(t(scores))),2,max)
+  
+  thres = sort(m,decreasing=TRUE)[min(top.n,length(m))]
+  
+  data = as.matrix(scores)
+  
+  if (normalize==T) {
+      #for (i in 1:nrow(data)) {
+         # max <- max(data[i,])
+         # min <- min(data[i,])
+         # data[,i] <- (data[,i]-min)/(max-min)
+     # }
+    mmax = rowMaxs(data, value = T)
+    mmin = rowMins(data, value = T)
+    data = (data-mmin)/(mmax-mmin)
+    data = data^3
+     
+  }
+  data = data[,m>(thres-1e-6)]
+  
+  
+  data = t(data)
+  
+  if (!is.null(clusters)) {
+    clusters = as.data.frame(clusters)
+    colnames(clusters) = 'Clusters'
+    rownames(clusters) = colnames(data)
+    
+  }
+  additional_params = list(...)
+  if (is.null(additional_params$annotation_colors)) {
+    annotation_colors = NA
+  } else {
+    annotation_colors = additional_params$annotation_colors
+  }
+  clustering_method = 'ward.D2'
+  if (order.by.clusters==T) {
+    data = data[,order(clusters$Clusters)]
+    clusters = clusters[order(clusters$Clusters),,drop=F]
+    pheatmap(data,border_color=NA,show_colnames=T,
+             clustering_method=clustering_method,fontsize_row=fontsize_row,
+             annotation_col = clusters,cluster_cols = F,silent=silent, 
+             annotation_colors=annotation_colors, color = rev(colorblind_vector(50)))
+  } else if (!is.null(cells_order)) {
+    data = data[,cells_order]
+    clusters = clusters[cells_order,,drop=F]
+    pheatmap(data,border_color=NA,show_colnames=T,
+             clustering_method=clustering_method,fontsize_row=fontsize_row,
+             annotation_col = clusters,cluster_cols = F,silent=silent, 
+             annotation_colors=annotation_colors, color = rev(colorblind_vector(50)))
+  } else {
+    if (!is.null(clusters)) {
+      pheatmap(data,border_color=NA,show_colnames=T,
+               clustering_method=clustering_method,fontsize_row=fontsize_row,
+               annotation_col = clusters,silent=silent, 
+               annotation_colors=annotation_colors, color = rev(colorblind_vector(50)))
+    } else {
+      pheatmap(data[,sample(ncol(data))],border_color=NA,show_colnames=T,
+               clustering_method=clustering_method,fontsize_row=fontsize_row,
+               silent=silent, annotation_colors=annotation_colors, color = rev(colorblind_vector(50)))
+      
+    }
+  }
+}
+```
+
+Now we can graph the results by cluster using the newer **SingleR.DrawHeatmap2()** function. There are two data sets in singleR for mice - the first, refereed to #####. There are also two major outputs by cohort *SingleR.single.main* refers to results reduced across cell types, while *SingleR.single* offers finer granularity for cell subtypes.
+
+```{r}
+dir.create("DataAnalysis/SingleR")
+
+pdf("./DataAnalysis/SingleR/CellTypes_complex2.pdf")
+SingleR.DrawHeatmap2(singler$singler[[2]]$SingleR.single, top.n = 50, clusters = singler$singler[[2]]$SingleR.single$cell.names, order.by.clusters = F, 
+color = rev(colorblind_vector(50)), normalize = T)
+dev.off()
+
+pdf("./DataAnalysis/SingleR/CellTypes_complex1.pdf")
+SingleR.DrawHeatmap2(singler$singler[[1]]$SingleR.single, top.n = 50, clusters = singler$singler[[1]]$SingleR.single$cell.names, order.by.clusters = F, normalize = T)
+dev.off()
+
+pdf("./DataAnalysis/SingleR/CellTypes_simple1.pdf")
+SingleR.DrawHeatmap2(singler$singler[[1]]$SingleR.single.main, top.n = 15, clusters = singler$singler[[1]]$SingleR.single$cell.names, order.by.clusters = F, normalize = T)
+dev.off()
+
+pdf("./DataAnalysis/SingleR/CellTypes_simple2.pdf")
+SingleR.DrawHeatmap2(singler$singler[[2]]$SingleR.single.main, top.n = 15, clusters = singler$singler[[2]]$SingleR.single$cell.names, order.by.clusters = F, normalize = T) 
+dev.off()
+```
+
+***
+
+#Assigning Major Cell Types
