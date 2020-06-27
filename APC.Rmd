@@ -1,0 +1,713 @@
+---
+title: Integration of multiple experiments for the ccRCC project
+author: 
+- name: Nick Borcherding
+  email: ncborch@gmail.com
+  affiliation: Washington University in St. Louis, School of Medicine, St. Louis, MO, USA
+date: "June 25, 2020"
+output:
+  BiocStyle::html_document:
+    toc_float: true
+
+---
+
+```{r, echo=FALSE, results="hide", message=FALSE}
+knitr::opts_chunk$set(error=FALSE, message=FALSE, warning=FALSE)
+library(BiocStyle)
+```
+
+
+# Preperation
+
+## Loading Libaries
+
+In general I like to load libraries here that we will use universally, and then call other libraries when we need them in the code chunks that are relevant. 
+
+```{r}
+suppressPackageStartupMessages(library(Seurat))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(dplyr))
+```
+
+## Loading Data
+
+```{r}
+integrated <- readRDS("./data/Processed/integrated_Cluster.rds")
+load("./data/Processed/completeMeta.rda")
+```
+
+## Selecting Color Palette
+
+```{r setup, include=FALSE}
+colorblind_vector <- colorRampPalette(c("#FF4B20", "#FFB433", "#C6FDEC", "#7AC5FF", "#0348A6"))
+```
+
+***
+
+# Initial Subsetting and Analysis
+
+```{r}
+APC <- subset(integrated, Major == "APC")
+APC <- NormalizeData(APC)
+rm(integrated)
+```
+
+We are also going to create a subdirectory for all T cell analyses:
+```{r}
+dir.create("./DataAnalysis/CellType/APC")
+```
+
+
+## Cell Cycle 
+
+Cell cycle regression as described in the [Satija lab website](https://satijalab.org/seurat/v3.1/cell_cycle_vignette.html).  
+
+```{r}
+cc.genes <- Seurat::cc.genes.updated.2019
+s.genes <- cc.genes$s.genes
+g2m.genes <- cc.genes$g2m.genes
+```
+
+Now we can perform cell cycle scoring with the genes. For now, I am not going to regress using the assingments or save the integrated object with the calculations.
+
+```{r}
+APC <- CellCycleScoring(APC, s.features = s.genes, g2m.features = g2m.genes, set.ident = FALSE)
+```
+
+Like above with the contribution by condition (**type**), we can now look at the phases assignments by cluster and condition. We do not need to scale if we seperate **type** into seperate bar graphs.
+
+```{r}
+dir.create("./DataAnalysis/CellType/APC/CellCycle")
+freq_table <- APC[[]]
+freq_table <- freq_table[,c("type", "Final_clusters", "Phase")]
+freq_table <- subset(freq_table, Phase != "Undecided") #removing undecided phases
+freq_table <- freq_table %>%
+    group_by(type, Final_clusters, Phase) %>%
+    summarise(n = n())
+
+freq_table$Phase <- factor(freq_table$Phase, levels = c("G1", "S", "G2M")) #ordering phases
+freq_table$Final_clusters <- factor(freq_table$Final_clusters, levels = c(0,4,10,11,15,16,19,20,22))
+
+ggplot(freq_table, aes(x=Final_clusters, y=n, fill=Phase)) + 
+  geom_bar(stat="identity", position="fill", color="black", lwd=0.25) + 
+  theme(axis.title.x = element_blank())+ 
+    facet_grid(type ~.) + 
+   scale_fill_manual(values=colorblind_vector(3)) + 
+  theme_classic()
+ggsave(path = "./DataAnalysis/CellType/APC/CellCycle", file = "CellCycle_byCluster_byType.pdf", height=6, width=6)
+
+ggplot(freq_table, aes(x=Final_clusters, y=n, fill=Phase)) + 
+  stat_summary(geom="bar", position="fill", color="black", lwd=0.25) + 
+  theme(axis.title.x = element_blank())+ 
+   scale_fill_manual(values=colorblind_vector(3)) + 
+  theme_classic()
+ggsave(path = "./DataAnalysis/CellType/APC/CellCycle", file = "CellCycle_byCluster.pdf", height=2, width=6)
+```
+
+
+```{r}
+APC$Phase <- factor(APC$Phase, levels = c("G1", "S", "G2M")) #ordering phases
+DimPlot(object = APC, reduction = 'umap', group.by = "Phase", split.by = "type") +
+    scale_color_manual(values=colorblind_vector(3)) 
+
+
+ggsave(path = "./DataAnalysis/CellType/APC/CellCycle", filename="CellCycle_UMAP_byType.eps", width=10.5, height=3)
+```
+
+## Reclustering 
+
+Isolating just the T cells, stripping the seurat object of non-"RNA" values using *DietSeurat()* and then spliting the object to create a list that can be fed into **SCTransform()**
+```{r eval=FALSE}
+APC@meta.data$Run <- paste0(APC@meta.data$sample, "_", APC@meta.data$type) #Define the sequence run
+APC[["percent.mt"]] <- PercentageFeatureSet(APC, pattern = "^MT-") #Calculate %mito
+
+APC <- DietSeurat(APC, assays = "RNA")
+T.list <- SplitObject(object = APC , split.by = "Run")
+
+for (i in 1:length(T.list)) {
+    T.list[[i]] <- SCTransform(T.list[[i]], verbose = FALSE, conserve.memory=TRUE)
+}
+rm(APC)
+```
+
+Integrating the data as above with the whole data set.
+```{r eval = FALSE}
+options(future.globals.maxSize= 2621440000)
+features <- SelectIntegrationFeatures(object.list = T.list, nfeatures = 3000)
+T.list <- PrepSCTIntegration(object.list = T.list, anchor.features = features,
+verbose = FALSE)
+T.anchors <- FindIntegrationAnchors(object.list = T.list, normalization.method = "SCT",
+anchor.features = features, verbose = FALSE, k.filter = 50)
+APC <- IntegrateData(anchorset = T.anchors, normalization.method = "SCT", verbose = FALSE)
+rm(T.list)
+rm(T.anchors)
+saveRDS(APC, file = "./data/Processed/APC_Precluster.rds")
+```
+
+Now we can process the intgreated T cells and identify clusters.
+```{r eval = FALSE}
+APC <- readRDS("./data/Processed/APC_Precluster.rds")
+
+
+dir.create("./DataAnalysis/CellType/APC/DimensionInputs")
+for (i in c(10,15,20,25,30,35,40)) {
+    
+    integrated2 <- ScaleData(object = APC, verbose = FALSE)
+    integrated2 <- RunPCA(object = integrated2, npcs = 40, verbose = FALSE)
+    integrated2 <- RunUMAP(object = integrated2, reduction = "pca", 
+        dims = 1:i) #dimensions for  UMAP
+    for (x in c(10,15,20,25,30,35,40)) { #Dimensions for neighbors
+       integrated2 <- FindNeighbors(object = integrated2, dims = 1:x)
+       for(y in c(0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1)) { #Resolution
+           integrated2 <- FindClusters(object = integrated2, resolution = y, force.recalc=T)
+           plot1 <- DimPlot(integrated2, reduction = "umap", pt.size = 0.5, group.by = "orig.ident")
+           ggsave(path = "./DataAnalysis/CellType/APC/DimensionInputs", file = paste("UMAP", i, "_Neighbors", x, "_resolution", y, "_OrigIdent.pdf", sep=""), plot1, width=4.25, height=3)
+           plot2 <- DimPlot(object = integrated2, reduction = 'umap', label = T) + NoLegend()
+            ggsave(path = "./DataAnalysis/CellType/APC/DimensionInputs", file = paste("UMAP", i, "_Neighbors", x, "_resolution", y, "_clusters.pdf", sep=""), plot2, width=3.5, height=3)
+       }
+    }
+}
+rm(integrated2)
+
+```
+
+
+```{r eval = FALSE}
+APC <- ScaleData(object = APC, verbose = FALSE)
+APC <- RunPCA(object = APC, npcs = 40, verbose = FALSE)
+APC <- RunUMAP(object = APC, reduction = "pca", 
+    dims = 1:35)
+APC <- FindNeighbors(object = APC, dims = 1:40, force.recalc = T)
+APC <- FindClusters(object = APC, resolution = 0.7, force.recalc=T)
+```
+
+```{r}
+APC@meta.data$newCluster <- APC@active.ident
+DimPlot(object = APC, reduction = 'umap', label = T, ) + NoLegend()
+ggsave(path = "./DataAnalysis/CellType/APC", filename="IntegratedObject_byCluster.eps", width=3.5, height=3)
+DimPlot(object = APC, reduction = 'umap', group.by = "type") 
+ggsave(path = "./DataAnalysis/CellType/APC", filename="IntegratedObject_byType.eps", width=3.75, height=3)
+```
+
+```{r}
+freq_table <- table(APC@active.ident, APC$type)
+
+tTotal <- 12239
+pTotal <- 21160
+kTotal <- 1778
+totals <- c(kTotal,pTotal,tTotal)
+
+for (i in 1:3) { 
+    freq_table[,i] <- freq_table[,i]/totals[i]
+}
+
+freq_table <- reshape2::melt(freq_table)
+
+ggplot(freq_table, aes(x=as.factor(Var1), y=value, fill=Var2)) + 
+  geom_bar(stat="identity", position="fill", color="black", lwd=0.25) + 
+  theme(axis.title.x = element_blank()) + 
+   scale_fill_manual(values=rev(colorblind_vector(3))) + 
+  theme_classic() + 
+    xlab("Clusters") + 
+    coord_flip() 
+ggsave(path = "DataAnalysis/CellType/APC/", file = "relativeContribution_byClusterType_scaled.pdf", height=5, width=5)
+
+
+ggplot(freq_table, aes(x=as.factor(Var1), y=value, fill=Var2)) + 
+  geom_bar(stat="identity", color="black", lwd=0.25) + 
+  theme(axis.title.x = element_blank()) + 
+   scale_fill_manual(values=rev(colorblind_vector(3))) + 
+  theme_classic() + 
+    xlab("Clusters") + 
+    coord_flip()
+ggsave(path = "DataAnalysis/CellType/APC/", file = "totalContribution_byClusterType_scaled.pdf", height=5, width=5)
+
+```
+
+
+###Expression Markers in T cells
+
+Like above we also want to look at the expression markers that define clusters and T cell subtypes. First we will make the schex-based reductions. 
+
+```{r}
+suppressPackageStartupMessages(library(schex))
+APC <- make_hexbin(APC, 40, dimension_reduction = "UMAP")
+```
+
+Here is a list I use in T cell identification, we can run these first and store them in the selected folder.
+
+```{r}
+genelist <- read.delim("./data/immune_sign.txt")
+genelist <- c(genelist$M1.Macro, genelist$M2.Macro, genelist$DC1, genelist$DC2, genelist$DC3, genelist$DC4, genelist$DC5, genelist$DC6, genelist$Langerhan)
+genelist <- toupper(unique(genelist))
+
+
+dir.create("DataAnalysis/CellType/APC/markers")
+dir.create("DataAnalysis/CellType/APC/markers/selected")
+
+DefaultAssay(APC) <- "RNA"
+
+for (i in seq_along(genelist)) {
+        if (length(which(rownames(APC@assays$RNA@counts) == genelist[i])) == 0){
+            next() #Need to loop here because plot_hexbin_feature() does not have a built-in function to deal with absence of selected gene
+        } else {
+        plot <- plot_hexbin_feature(APC, feature = genelist[i], type = "counts", action = "prop_0")+ 
+             guides(fill=F, color = F) + 
+                scale_fill_gradientn(colors = rev(colorblind_vector(13))) 
+        ggsave(path = "DataAnalysis/CellType/APC/markers/selected", file = paste0( genelist[i], "_prop.pdf"), plot, height=3, width=3.25)
+        }
+    }
+
+```
+
+We can also look at the top markers for each cluster by using the *FindAllMarkers()* call.
+
+```{r}
+All.markers <- FindAllMarkers(APC, assay = "RNA", pseudocount.use = 0.1, only.pos = T) 
+write.table(All.markers, file = "DataAnalysis/CellType/APC/markers/FindAllMarkers_output.txt", col.names=NA, sep="\t",append=F)
+```
+
+```{r}
+All.markers <- read.delim("./DataAnalysis/CellType/APC/markers/FindAllMarkers_output.txt")
+top10 <- All.markers %>% group_by(cluster) %>% top_n(n = 10, wt = avg_logFC)
+top10 <- top10$gene #just want the IDs
+
+dir.create("DataAnalysis/CellType/APC/markers/TopClusterMarkers")
+for (i in seq_along(top10)) {
+    plot <- plot_hexbin_feature(APC, feature = top10[i], type = "counts", action = "prop_0")+ 
+             guides(fill=F, color = F) + 
+                scale_fill_gradientn(colors = rev(colorblind_vector(13))) 
+        ggsave(path = "DataAnalysis/CellType/APC/markers/TopClusterMarkers", file = paste0("Top10markers", "_", top10[i], "_prop.pdf"), plot, height=3, width=3.25)
+}
+```
+
+
+```{r}
+top10 <- All.markers %>% group_by(cluster) %>% top_n(n = 10, wt = avg_logFC)
+DotPlot(APC, features = unique(top10$gene)) + coord_flip() + 
+    scale_color_gradientn(colors = rev(colorblind_vector(11))) + 
+    guides(color = F, size = F) +
+    scale_size(range = c(0.5,3.5))
+ggsave(path = "DataAnalysis/CellType/APC/markers", file = "Top10_dotplot.eps", height=18, width=4)
+```
+
+
+```{r}
+genes <- c("CCR7", "LEF1", "SELL", "TCF7", "CD27", "CD28", "CD40LG", "CD44", "CD69", "IL2RA", "TFRC","TNFRSF4", "TNFRSF8", "CCL3", "CCL4","GZMA", "GZMB", "GZMK", "IFNG","NKG7", "PRF1", "CTLA4", "HAVCR2", "LAG3", "PDCD1", "TIGIT")
+
+DotPlot(APC, features = genes) + coord_flip() + 
+    scale_color_gradientn(colors = rev(colorblind_vector(11))) + 
+    guides(color = F, size = F) +
+    scale_size(range = c(0.5,3.5))
+ggsave(path = "DataAnalysis/CellType/APC/markers", file = "SelectMarkers_dotplot.eps", height=6, width=2.5)
+```
+
+***
+
+# Differential Gene Expression
+
+## Comparing tumor vs peripheral blood in just the ccRCC samples
+
+### Overall comparison
+
+```{r}
+dir.create("DataAnalysis/CellType/APC/DGE")
+TumorOnly <- subset(APC, orig.ident == "P1" | orig.ident ==  "P2" | orig.ident ==  "P3")
+TumorOnly  <- NormalizeData(TumorOnly , assay = "RNA")
+TumorOnly <- SetIdent(TumorOnly, value = TumorOnly@meta.data$type)
+markers <- FindMarkers(object = TumorOnly, 
+                only.pos = F, ident.1 = "T", ident.2="P", min.diff.pct = -Inf, 
+                logfc.threshold = -Inf, min.pct = -Inf)
+markers$names <- rownames(markers)
+markers  <- markers  %>%
+        mutate(Difference = pct.1 - pct.2)
+mat <- data.frame(markers)
+  write.table(mat, file="./DataAnalysis/CellType/APC/DGE/Overall_differentialMarkers_TvPB.txt",
+                sep="\t",append=F, row.names = FALSE)
+```
+
+### By Cluster comparison
+```{r}
+
+DefaultAssay(TumorOnly) <- "RNA"
+TumorOnly <- subset(APC, orig.ident == "P1" | orig.ident ==  "P2" | orig.ident ==  "P3")
+clusters <- as.character(unique(TumorOnly@active.ident))
+mat <- NULL
+for (i in seq_along(clusters)) {
+    tmp <- subset(TumorOnly, idents = clusters[i])
+    tmp <- NormalizeData(tmp, assay = "RNA") #after subset always normalize RNA
+    tmp <- SetIdent(tmp, value = tmp@meta.data$type)
+    markers <- FindMarkers(object = tmp, 
+                only.pos = F, ident.1 = "T", ident.2="P", min.diff.pct = -Inf, 
+                logfc.threshold = -Inf, min.pct = -Inf)
+    markers$names <- rownames(markers)
+    markers  <- markers  %>%
+        mutate(Difference = pct.1 - pct.2)
+    
+    mat <- data.frame(markers)
+    write.table(mat, file=paste("./DataAnalysis/CellType/APC/DGE/TvPB_differentialMarkers_", clusters[i], ".txt", sep=""),
+                sep="\t",append=F, row.names = FALSE)
+    mat=NULL
+}
+```
+
+## Comparing tumor vs normal kidney parenchyma
+
+### Overall comparison
+
+```{r}
+dir.create("DataAnalysis/CellType/APC/DGE")
+subset <- subset(APC, Run == "P1_T" |  Run == "P2_T" |  Run == "P3_T" |  Run == "N2_K" |  Run == "N3_K" |  Run == "N4_K")
+subset <- NormalizeData(subset  , assay = "RNA")
+subset <- SetIdent(subset, value = subset@meta.data$type)
+markers <- FindMarkers(object = subset , 
+                only.pos = F, ident.1 = "T", ident.2="K", min.diff.pct = -Inf, 
+                logfc.threshold = -Inf, min.pct = -Inf)
+markers$names <- rownames(markers)
+markers  <- markers  %>%
+        mutate(Difference = pct.1 - pct.2)
+mat <- data.frame(markers)
+  write.table(mat, file="./DataAnalysis/CellType/APC/DGE/Overall_differentialMarkers_TvK.txt",
+                sep="\t",append=F, row.names = FALSE)
+```
+
+### By Cluster comparison
+```{r}
+subset <- subset(APC, Run == "P1_T" |  Run == "P2_T" |  Run == "P3_T" |  Run == "N2_K" |  Run == "N3_K" |  Run == "N4_K")
+clusters <- as.character(unique(subset@active.ident))
+DefaultAssay(subset) <- "RNA"
+
+
+mat <- NULL
+for (i in seq_along(clusters)) {
+    tmp <- subset(subset, idents = clusters[i])
+    tmp <- NormalizeData(tmp, assay = "RNA") #after subset always normalize RNA
+    tmp <- SetIdent(tmp, value = tmp@meta.data$type)
+    markers <- FindMarkers(object = tmp, 
+                only.pos = F, ident.1 = "T", ident.2="K", min.diff.pct = -Inf, 
+                logfc.threshold = -Inf, min.pct = -Inf)
+    markers$names <- rownames(markers)
+    markers  <- markers  %>%
+        mutate(Difference = pct.1 - pct.2)
+    
+    mat <- data.frame(markers)
+    write.table(mat, file=paste("./DataAnalysis/CellType/APC/DGE/TvK_differentialMarkers_", clusters[i], ".txt", sep=""),
+                sep="\t",append=F, row.names = FALSE)
+    mat=NULL
+}
+```
+
+## Comparing peripheral blood of patients to peripheral blood of normal healthy
+
+```{r}
+subset <- subset(APC, Run == "P1_P" |  Run == "P2_P" |  Run == "P3_P" |  Run == "N1_P")
+subset@meta.data$ind <- ifelse(subset@meta.data$Run == "N1_P", "Con", "Tum")
+subset <- NormalizeData(subset  , assay = "RNA")
+subset <- SetIdent(subset, value = subset@meta.data$ind)
+markers <- FindMarkers(object = subset , 
+                only.pos = F, ident.1 = "Tum", ident.2="Con", min.diff.pct = -Inf, 
+                logfc.threshold = -Inf, min.pct = -Inf)
+markers$names <- rownames(markers)
+markers  <- markers  %>%
+        mutate(Difference = pct.1 - pct.2)
+mat <- data.frame(markers)
+  write.table(mat, file="./DataAnalysis/CellType/APC/DGE/Overall_differentialMarkers_TumvCon.txt",
+                sep="\t",append=F, row.names = FALSE)
+```
+
+***
+
+# Trajectory
+
+```{r}
+library(slingshot)
+dir.create("./DataAnalysis/CellType/APC/slingshot")
+
+sce <- as.SingleCellExperiment(APC) 
+
+sds <- slingshot(Embeddings(APC, "umap"), clusterLabels = APC@active.ident, allow.breaks = TRUE, stretch = 0, reducedDim = "UMAP", start.clus = 4, end.clus = 1, shrink.method = "gaussian") #Calcualting the trajectory
+```
+
+```{r}
+library(scales)
+#Making plots more siminmar to ggplot outputs of Seurat
+cell_pal <- function(cell_vars, pal_fun,...) {
+  if (is.numeric(cell_vars)) {
+    pal <- pal_fun(100, ...)
+    return(pal[cut(cell_vars, breaks = 100)])
+  } else {
+    categories <- sort(unique(cell_vars))
+    pal <- setNames(pal_fun(length(categories), ...), categories)
+    return(pal[cell_vars])
+  }
+}
+#We need color palettes Leiden clusters. These would be the same colors seen in the Seurat plots.
+
+cell_colors_clust <- cell_pal(APC@active.ident, hue_pal())
+
+pdf("./DataAnalysis/CellType/APC/slingshot/Trajectory.pdf", height=4, width=4)
+plot(reducedDim(sds), col = cell_colors_clust, pch = 16, cex = 0.25)
+lines(sds, lwd = 2, type = 'lineages', col = 'black')
+dev.off()
+pdf("./DataAnalysis/CellType/APC/slingshot/Trajectory2.pdf", height=4, width=4)
+plot(reducedDim(sds), col = cell_colors_clust, pch = 16, cex = 0.5)
+lines(sds, lwd = 2, col = 'black')
+dev.off()
+```
+
+```{r}
+nc <- 2
+pt <- slingPseudotime(sds)
+nms <- colnames(pt)
+nr <- ceiling(length(nms)/nc)
+pal <- rev(colorblind_vector(100))
+par(mfrow = c(nr, nc))
+pdf("./DataAnalysis/CellType/APC/slingshot/Trajectory2_pseudotime.pdf", height=4, width=4)
+for (i in nms) {
+  colors <- pal[cut(pt[,i], breaks = 100)]
+  plot(reducedDim(sds), col = colors, pch = 16, cex = 0.5, main = i)
+  lines(sds, lwd = 2, col = 'black')
+}
+dev.off()
+```
+
+## Using pseudotime to rank genes
+
+```{r}
+library(rsample)
+library(tidymodels)
+
+APC <- FindVariableFeatures(APC)
+
+# Get top 498 highly variable genes
+top_hvg <- HVFInfo(APC) %>% 
+  mutate(., bc = rownames(.)) %>% 
+  arrange(desc(variance)) %>% 
+  top_n(300, variance) %>% 
+  pull(bc)
+# Prepare data for random forest
+dat_use <- t(as.matrix(GetAssayData(APC, slot = "data"))[top_hvg,])
+dat_use_df <- cbind(slingPseudotime(sds)[,1], dat_use) # Do curve 2, so 2nd columnn
+colnames(dat_use_df)[1] <- "pseudotime"
+dat_use_df <- as.data.frame(dat_use_df[!is.na(dat_use_df[,1]),])
+
+
+dat_split <- initial_split(dat_use_df)
+dat_train <- training(dat_split)
+dat_val <- testing(dat_split)
+
+colnames(dat_train) <- stringr::str_replace(colnames(dat_train), "-", ".") #Replace dash with dots in gene names
+colnames(dat_val) <- stringr::str_replace(colnames(dat_val), "-", ".")
+
+#Performing random forest
+model <- rand_forest(mtry = 200, trees = 1400, min_n = 15, mode = "regression") %>%
+  set_engine("ranger", importance = "impurity", num.threads = 3) %>%
+  fit(pseudotime ~ ., data = dat_train) 
+
+#Getting top 200 genes by pseudotime
+var_imp <- sort(model$fit$variable.importance, decreasing = TRUE)
+top_genes <- names(var_imp)[1:200]
+top_genes <- gsub("\\.", "-", top_genes)
+
+output <- data.frame(model$fit$variable.importance)
+colnames(output) <- "Var.Imp"
+write.table(output, file = "DataAnalysis/CellType/APC/slingshot/VarImp_model.txt", col.names=NA, sep="\t",append=F)
+```
+
+```{r}
+output <- read.delim("./DataAnalysis/CellType/APC/slingshot/VarImp_model.txt")
+subset_out <- output %>% top_n(20, wt = Var.Imp)
+
+ggplot(subset_out, aes(x=reorder(X, Var.Imp), y=Var.Imp)) +
+    geom_bar(stat = "identity") + 
+    theme_classic() + 
+    coord_flip() + 
+    theme(axis.title.y = element_blank())
+ggsave("./DataAnalysis/CellType/APC/slingshot/top20_varImp_raw.pdf")
+
+subset_out$Var.Imp <- subset_out$Var.Imp/max(output$Var.Imp)
+
+ggplot(subset_out, aes(x=reorder(X, Var.Imp), y=Var.Imp)) +
+    geom_bar(stat = "identity") + 
+    theme_classic() + 
+    coord_flip() + 
+    theme(axis.title.y = element_blank())
+ggsave("./DataAnalysis/CellType/APC/slingshot/top20_varImp_scaled.pdf")
+```
+
+
+### Importance for T-cell-related genes 
+```{r}
+output <- read.delim("./DataAnalysis/CellType/APC/slingshot/VarImp_model.txt")
+genelist <- c("Cd8a", "Cd8b1", "Cd4", "Cd3d", "Foxp3", "Il2ra", "Il7r", "Ccr7", "Ccl4", "Gata3", "Tbx21",  "Cd44", "Cd28", "Sell", "Fas", "Ctla4", "Pdcd1", "Icos", "Havcr2", "Entpd1", "Tigit", "Cd244", "Eomes", "Cd160", "Il10", "Smad3", "Klrg1", "Itga4", "Ifna1", "Ifng", "Cxcr3", "Ccr5", "Il12rb2", "Il18ra", "Il27a", "Stat1", "Stat4", "Ccr3", "Ccr4", "Ccr6", "Ccr10", "Ccr8", "Stat5", "Stat6", "Il4", "Il5", "Il6", "Il9", "Il10", "Il13", "Il17a", "Il17f", "Il21", "Il22", "Tgfbr2", "Ccl20", "Ccl22", "Rorgt", "Rora", "Rorc", "Stat3", "Tnfsf8", "Tnfrsf4", "Tnfrsf8","Ccl5", "Cxcr5", "Cxcr6", "Maf", "Bcl6", "Gzmb", "Prf1", "Ms4a4b", "Nfat", "Blimp1", "Batf","Il23r", "Top2a", "Birc5", "Cxcl13", "Nkg7", "Gapdh", "Nfkbia", "Igfbp4", "Cxcl2", "Cxcl14", "Ifngr1", "Cd28", "Cd3e", "Cd3g", "Cd52", "Lag3", "Junb", "Fox", "Ifi27l2a", "Ifitm3", "Gzma")
+genelist <- toupper(unique(genelist))
+
+subset_out <- subset(output, X %in% genelist)
+
+ggplot(subset_out, aes(x=reorder(X, Var.Imp), y=Var.Imp)) +
+    geom_bar(stat = "identity") + 
+    theme_classic() + 
+    coord_flip() + 
+    theme(axis.title.y = element_blank())
+ggsave("./DataAnalysis/CellType/APC/slingshot/Filtered_varImp_raw.pdf")
+
+subset_out$Var.Imp <- subset_out$Var.Imp/max(output$Var.Imp)
+
+ggplot(subset_out, aes(x=reorder(X, Var.Imp), y=Var.Imp)) +
+    geom_bar(stat = "identity") + 
+    theme_classic() + 
+    coord_flip() + 
+    theme(axis.title.y = element_blank())
+ggsave("./DataAnalysis/CellType/APC/slingshot/Filtered_varImp_scaled.pdf")
+```
+
+```{r}
+PT <- as.data.frame(slingPseudotime(sds))
+colnames(PT) <- c("PseudoT1", "PseudoT2")
+APC <- AddMetaData(APC, PT)
+saveRDS(APC, file = "./data/Processed/APC_FullCluster.rds")
+APC <- readRDS("./data/Processed/APC_FullCluster.rds")
+```
+
+***
+
+#Clonotype Analysis
+
+```{r}
+dir.create("./DataAnalysis/CellType/APC/clonotype")
+```
+
+
+```{r}
+APC@meta.data$cloneType <- factor(APC@meta.data$cloneType, levels = c("Hyperexpanded (100 < X <= 500)", "Large (20 < X <= 100)", "Medium (5 < X <= 20)", "Small (1 < X <= 5)", "Single (0 < X <= 1)", NA))
+DimPlot(APC, group.by = "cloneType") + scale_color_manual(values = c(colorblind_vector(5)), na.value="grey")
+ggsave(path = "DataAnalysis/CellType/APC/clonotype", filename="IntegratedObject_byClonotypeFreq.eps", width=6.5, height=3)
+```
+
+
+```{r}
+TumorOnly <- subset(APC, orig.ident == "P1" | orig.ident ==  "P2" | orig.ident ==  "P3")
+CD8 <- expression2List(APC, group = "cluster")
+TumorOnly  <- expression2List(TumorOnly,  group = "cluster")
+```
+
+```{r}
+quantContig(CD8, cloneCall="gene+nt", scale = TRUE) + guides(fill = F)
+ggsave("DataAnalysis/CellType/APC/clonotype/UniqueClonotypes.pdf", height=2, width=2.5)
+
+quantContig(TumorOnly, cloneCall="gene+nt", scale = TRUE) + guides(fill = F)
+ggsave("DataAnalysis/CellType/APC/clonotype/UniqueClonotype_TumorOnlys.pdf", height=2, width=2.5)
+```
+
+```{r}
+compareClonotypes(CD8, numbers = 15, 
+                    cloneCall="gene+nt", graph = "alluvial")
+ggsave("DataAnalysis/CellType/APC/clonotype/Alluvial_compare.pdf", height=4, width=20)
+
+compareClonotypes(TumorOnly, numbers = 15, 
+                    cloneCall="gene+nt", graph = "alluvial")
+ggsave("DataAnalysis/CellType/APC/clonotype/Alluvial_compare_TumorOnly.pdf", height=4, width=20)
+```
+
+```{r}
+clonalHomeostasis(CD8, cloneCall = "gene+nt")
+ggsave("DataAnalysis/CellType/APC/clonotype/Clonal_homeostasis.pdf", height=2, width=5)
+
+clonalProportion(CD8, cloneCall = "gene+nt")
+ggsave("DataAnalysis/CellType/APC/clonotype/Clonal_proportion.pdf", height=2, width=5)
+
+clonalOverlap(CD8, cloneCall = "gene+nt", method = "morisita")
+ggsave("DataAnalysis/CellType/APC/clonotype/Clonal_overlap_morisita.pdf", height=3, width=4)
+
+clonalOverlap(CD8, cloneCall = "gene+nt", method = "overlap")
+ggsave("DataAnalysis/CellType/APC/clonotype/Clonal_overlap_overlap.pdf", height=3, width=4)
+
+clonalHomeostasis(TumorOnly, cloneCall = "gene+nt")
+ggsave("DataAnalysis/CellType/APC/clonotype/Clonal_homeostasis_TumorOnly.pdf", height=2, width=5)
+
+clonalProportion(TumorOnly, cloneCall = "gene+nt")
+ggsave("DataAnalysis/CellType/APC/clonotype/Clonal_proportion_TumorOnly.pdf", height=2, width=5)
+
+clonalOverlap(TumorOnly, cloneCall = "gene+nt", method = "morisita")
+ggsave("DataAnalysis/CellType/APC/clonotype/Clonal_overlap_morisita_TumorOnly.pdf", height=3, width=4)
+
+clonalOverlap(TumorOnly, cloneCall = "gene+nt", method = "overlap")
+ggsave("DataAnalysis/CellType/APC/clonotype/Clonal_overlap_overlap_TumorOnly.pdf", height=3, width=4)
+```
+
+```{r}
+clonalDiversity(CD8, cloneCall = "gene+nt", group = "samples")
+ggsave("DataAnalysis/CellType/APC/clonotype/Clonal_Diversity.pdf", height=3, width=4)
+
+clonalDiversity(TumorOnly, cloneCall = "gene+nt", group = "samples")
+ggsave("DataAnalysis/CellType/APC/clonotype/Clonal_Diversity_TumorOnly.pdf", height=3, width=4)
+```
+
+```{r}
+alluvialClonotypes(APC, cloneCall = "gene", 
+                   y.axes = c("Frequency", "type", "newCluster"), 
+                   color = "newCluster") 
+ggsave("DataAnalysis/CellType/APC/clonotype/Clonal_Alluvial.pdf", height=3, width=5)
+
+TumorOnly <- subset(APC, orig.ident == "P1" | orig.ident ==  "P2" | orig.ident ==  "P3")
+alluvialClonotypes(TumorOnly, cloneCall = "gene", 
+                   y.axes = c("Frequency", "type", "newCluster"), 
+                   color = "newCluster") 
+ggsave("DataAnalysis/CellType/APC/clonotype/Clonal_Alluvial_TumorOnly.pdf", height=3, width=5)
+```
+
+***
+
+#ssGSEA
+
+```{r}
+dir.create("./DataAnalysis/CellType/APC/GSEA")
+library(escape)
+GS <- getGeneSets(library = "H")
+ES <- enrichIt(obj = APC, gene.sets = GS, groups = 1000, cores = 4)
+save(ES, file = "./DataAnalysis/CellType/APC/GSEA/H_enrichment.rda")
+```
+
+
+```{r}
+load("./DataAnalysis/CellType/APC/GSEA/H_enrichment.rda")
+meta <- APC[[]]
+meta <- merge(meta, ES, by = "row.names")
+names <- colnames(ES)
+type_sig <- getSignificance(meta[,c("type",names)], group = "type")
+cluster_sig <- getSignificance(meta[,c("newCluster",names)], group = "newCluster")
+clonotype_sig <- getSignificance(na.omit(meta[,c("cloneType",names)]), group = "cloneType")
+colnames(clonotype_sig)[1:5] <- gsub("\\..*", "", colnames(clonotype_sig)[1:5])
+
+write.table(type_sig , file = "DataAnalysis/CellType/APC/GSEA/lmfit_byType.txt", col.names=NA, sep="\t",append=F)
+write.table(cluster_sig, file = "DataAnalysis/CellType/APC/GSEA/lmfit_byCluster.txt", col.names=NA, sep="\t",append=F)
+write.table(clonotype_sig, file = "DataAnalysis/CellType/APC/GSEA/lmfit_byCloneType.txt", col.names=NA, sep="\t",append=F)
+```
+
+
+```{r}
+top10 <- cluster_sig %>% top_n(10, wt=F)
+top10 <- rownames(top10)
+
+for (i in seq_along(top10)){
+  ridgeEnrichment(meta, gene.set = top10[i], group = "newCluster", add.rug = TRUE) + facet_grid(.~type)
+  ggsave(path = "DataAnalysis/CellType/APC/GSEA/", file = paste0("Ridge_ClusterTop10_TypevsCluster_", top10[i], ".pdf"), height=3, width=5)
+}
+
+for (i in seq_along(top10)){
+  ridgeEnrichment(meta, gene.set = top10[i], group = "newCluster", add.rug = TRUE) 
+  ggsave(path = "DataAnalysis/CellType/APC/GSEA/", file = paste0("Ridge_ClusterTop10_Cluster_", top10[i], ".pdf"), height=3, width=5)
+}
+
+
+top10 <- type_sig %>% top_n(10, wt=F)
+top10 <- rownames(top10)
+for (i in seq_along(top10)){
+  ridgeEnrichment(meta, gene.set = top10[i], group = "type", add.rug = TRUE)
+  ggsave(path = "DataAnalysis/CellType/APC/GSEA/", file = paste0("Ridge_ClusterTop10_Type_", top10[i], ".pdf"), height=3, width=5)
+}
+
+
+```
+
+

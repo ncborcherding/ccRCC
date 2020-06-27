@@ -4,7 +4,7 @@ author:
 - name: Nick Borcherding
   email: ncborch@gmail.com
   affiliation: Washington University in St. Louis, School of Medicine, St. Louis, MO, USA
-date: "June 23, 2020"
+date: "June 25, 2020"
 output:
   BiocStyle::html_document:
     toc_float: true
@@ -704,7 +704,9 @@ ggsave(path = "DataAnalysis/UMAP", filename="IntegratedObject_byMinorCellType.ep
 
 ***
 
-# Saving Final Seurat Object
+# Saving Final Seurat Object and Meta Data
 ```{r}
 saveRDS(integrated, file = "./data/Processed/integrated_Cluster.rds")
+fullMeta <- integrated[[]]
+save(fullMeta, file = "./data/Processed/completeMeta.rda")
 ```

@@ -1,0 +1,39 @@
+Notes:
+
+2020_06_25 Spent the Day attempting to subset the the CD8, CD4 and all T cells from the integrated data. Using the SCTTransform, taking these subsets and clustering them. 
+Attempt 1: vars.regress = c(S.scores,G2M.scores, percent.mt) - This produces a blob of cells with no differentiaition in distribution. 
+Attempt 2: vars.regress = c('nFeature_RNA', 'nCount_RNA', "percent.mt") - Works with the combination of CD4 and CD8 T cells, but not the independent CD4 or CD8 alone
+Attempt 3: vars.regress = c("percent.mt")
+Attempt 4: No regression
+
+2020_06_27 APC Identification
+CELC9A+ C9
+CDC1C+ C5
+SIGLEC6+ C10
+CD14 C0,1,2,4,8 
+CD16/FCGR3A 3,6
+CD163 Variable C1
+CD141/BDCA-3/THBD Variable C9
+XCR1 C9 
+CD11c/ITGAX C1,4,5 
+CD123/IL3RA C10
+CLEC4C/BDCA-2 C10
+BDCA-4/NRP1 light C10
+LY75 C12 > C9
+CD64/FCGR1A C1 > C8
+CD115/CSF1R C3 > C1, C8, C6
+CD62L/SELL C2
+
+C0 CD14+ Monocytes
+C1 TAMs
+C2 CD14+ Monocytes
+C3 CD16+ Monocytes
+C4  Met.Deranged APC
+C5 CD207+ TR DC
+C6 CD16+ Monocytes
+C7 CLEC10A+ DC
+C8 TAM
+C9 cDC1
+C10 pDC
+C11 myeloid Platlets 
+C12 moDC
