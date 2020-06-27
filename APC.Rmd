@@ -148,6 +148,13 @@ Now we can process the intgreated T cells and identify clusters.
 ```{r eval = FALSE}
 APC <- readRDS("./data/Processed/APC_Precluster.rds")
 
+#Remove any cells with clonotype information attached
+cellnames <- subset(APC[[]], !is.na(cloneType))
+cellnames <- rownames(cellnames)
+'%!in%' <- function(x,y)!('%in%'(x,y))
+names <- rownames(APC[[]])
+names <- names[names %!in% cellnames]
+APC <- subset(APC, cells = names)
 
 dir.create("./DataAnalysis/CellType/APC/DimensionInputs")
 for (i in c(10,15,20,25,30,35,40)) {
@@ -171,6 +178,10 @@ rm(integrated2)
 
 ```
 
+Based on the review of the output above, we have selected the following parameters:
++  UMAP 35
++  Neighbors 40
++  Resolution = 0.7
 
 ```{r eval = FALSE}
 APC <- ScaleData(object = APC, verbose = FALSE)
@@ -181,6 +192,9 @@ APC <- FindNeighbors(object = APC, dims = 1:40, force.recalc = T)
 APC <- FindClusters(object = APC, resolution = 0.7, force.recalc=T)
 ```
 
+# Subclustering Analysis
+
+## Visualizing New Clusters
 ```{r}
 APC@meta.data$newCluster <- APC@active.ident
 DimPlot(object = APC, reduction = 'umap', label = T, ) + NoLegend()
@@ -188,6 +202,10 @@ ggsave(path = "./DataAnalysis/CellType/APC", filename="IntegratedObject_byCluste
 DimPlot(object = APC, reduction = 'umap', group.by = "type") 
 ggsave(path = "./DataAnalysis/CellType/APC", filename="IntegratedObject_byType.eps", width=3.75, height=3)
 ```
+
+## Calculating the relative proportion of types in each cluster
+
+Here we are using the total number of cell in the integrated data to scale the clusters. 
 
 ```{r}
 freq_table <- table(APC@active.ident, APC$type)
@@ -225,7 +243,7 @@ ggsave(path = "DataAnalysis/CellType/APC/", file = "totalContribution_byClusterT
 ```
 
 
-###Expression Markers in T cells
+## Expression Markers in T cells
 
 Like above we also want to look at the expression markers that define clusters and T cell subtypes. First we will make the schex-based reductions. 
 
@@ -238,7 +256,7 @@ Here is a list I use in T cell identification, we can run these first and store 
 
 ```{r}
 genelist <- read.delim("./data/immune_sign.txt")
-genelist <- c(genelist$M1.Macro, genelist$M2.Macro, genelist$DC1, genelist$DC2, genelist$DC3, genelist$DC4, genelist$DC5, genelist$DC6, genelist$Langerhan)
+genelist <- c(genelist$M1.Macro, genelist$M2.Macro, genelist$DC1, genelist$DC2, genelist$DC3, genelist$DC4, genelist$DC5, genelist$DC6, genelist$Langerhan, "ITGAX", "LY75", "CD8A", "CD4", "ITGAM", "FCGR1A")
 genelist <- toupper(unique(genelist))
 
 
@@ -291,15 +309,116 @@ DotPlot(APC, features = unique(top10$gene)) + coord_flip() +
 ggsave(path = "DataAnalysis/CellType/APC/markers", file = "Top10_dotplot.eps", height=18, width=4)
 ```
 
+## Correlating Markers with SingleR Output
 
 ```{r}
-genes <- c("CCR7", "LEF1", "SELL", "TCF7", "CD27", "CD28", "CD40LG", "CD44", "CD69", "IL2RA", "TFRC","TNFRSF4", "TNFRSF8", "CCL3", "CCL4","GZMA", "GZMB", "GZMK", "IFNG","NKG7", "PRF1", "CTLA4", "HAVCR2", "LAG3", "PDCD1", "TIGIT")
+library(SingleR)
+Average <- AverageExpression(APC, assay = "RNA", return.seurat = T)
+expr_matrix <- as.matrix(Average@assays$RNA@counts[,names(Average@active.ident)])
+gene_annotation <- data.frame(row.names=rownames(expr_matrix), gene_short_name=rownames(expr_matrix))
 
-DotPlot(APC, features = genes) + coord_flip() + 
-    scale_color_gradientn(colors = rev(colorblind_vector(11))) + 
-    guides(color = F, size = F) +
-    scale_size(range = c(0.5,3.5))
-ggsave(path = "DataAnalysis/CellType/APC/markers", file = "SelectMarkers_dotplot.eps", height=6, width=2.5)
+singler = CreateSinglerObject(expr_matrix, project.name = "Myo", annot = NULL, min.genes = 200,
+  technology = "10X", species = "Human", ref.list = list(), normalize.gene.length = F, variable.genes = "de",
+  fine.tune = T, do.signatures = F, do.main.types = T, 
+  reduce.file.size = T, numCores =4)
+  
+singler$seurat = Average 
+```
+
+```{r}
+
+library(pheatmap)
+library(Rfast)
+SingleR.DrawHeatmap2 = function(SingleR,cells.use = NULL, types.use = NULL,
+                               clusters=NULL,top.n=40,normalize=F,
+                               order.by.clusters=F,cells_order=NULL,silent=F,
+                               fontsize_row=9,...) {
+    scores = SingleR$scores
+  if (!is.null(cells.use)) {
+    scores = scores[cells.use,]
+  }
+  if (!is.null(types.use)) {
+    scores = scores[,types.use]
+  }
+  
+  m = apply(t(scale(t(scores))),2,max)
+  
+  thres = sort(m,decreasing=TRUE)[min(top.n,length(m))]
+  
+  data = as.matrix(scores)
+  
+  if (normalize==T) {
+      #for (i in 1:nrow(data)) {
+         # max <- max(data[i,])
+         # min <- min(data[i,])
+         # data[,i] <- (data[,i]-min)/(max-min)
+     # }
+    mmax = rowMaxs(data, value = T)
+    mmin = rowMins(data, value = T)
+    data = (data-mmin)/(mmax-mmin)
+    data = data^3
+     
+  }
+  data = data[,m>(thres-1e-6)]
+  
+  
+  data = t(data)
+  
+  if (!is.null(clusters)) {
+    clusters = as.data.frame(clusters)
+    colnames(clusters) = 'Clusters'
+    rownames(clusters) = colnames(data)
+    
+  }
+  additional_params = list(...)
+  if (is.null(additional_params$annotation_colors)) {
+    annotation_colors = NA
+  } else {
+    annotation_colors = additional_params$annotation_colors
+  }
+  clustering_method = 'ward.D2'
+  if (order.by.clusters==T) {
+    data = data[,order(clusters$Clusters)]
+    clusters = clusters[order(clusters$Clusters),,drop=F]
+    pheatmap(data,border_color=NA,show_colnames=T,
+             clustering_method=clustering_method,fontsize_row=fontsize_row,
+             annotation_col = clusters,cluster_cols = F,silent=silent, 
+             annotation_colors=annotation_colors, color = rev(colorblind_vector(50)))
+  } else if (!is.null(cells_order)) {
+    data = data[,cells_order]
+    clusters = clusters[cells_order,,drop=F]
+    pheatmap(data,border_color=NA,show_colnames=T,
+             clustering_method=clustering_method,fontsize_row=fontsize_row,
+             annotation_col = clusters,cluster_cols = F,silent=silent, 
+             annotation_colors=annotation_colors, color = rev(colorblind_vector(50)))
+  } else {
+    if (!is.null(clusters)) {
+      pheatmap(data,border_color=NA,show_colnames=T,
+               clustering_method=clustering_method,fontsize_row=fontsize_row,
+               annotation_col = clusters,silent=silent, 
+               annotation_colors=annotation_colors, color = rev(colorblind_vector(50)))
+    } else {
+      pheatmap(data[,sample(ncol(data))],border_color=NA,show_colnames=T,
+               clustering_method=clustering_method,fontsize_row=fontsize_row,
+               silent=silent, annotation_colors=annotation_colors, color = rev(colorblind_vector(50)))
+      
+    }
+  }
+}
+```
+
+```{r}
+dir.create("./DataAnalysis/CellType/APC/SingleR/")
+pdf("./DataAnalysis/CellType/APC/SingleR/CellTypes_complex2.pdf")
+SingleR.DrawHeatmap2(singler$singler[[2]]$SingleR.single, top.n = 50, clusters = singler$singler[[2]]$SingleR.single$cell.names, order.by.clusters = F, 
+color = rev(colorblind_vector(50)), normalize = T)
+dev.off()
+
+pdf("./DataAnalysis/CellType/APC/SingleR/CellTypes_complex1.pdf")
+SingleR.DrawHeatmap2(singler$singler[[1]]$SingleR.single, top.n = 50, clusters = singler$singler[[1]]$SingleR.single$cell.names, order.by.clusters = F, normalize = T)
+dev.off()
+
+
 ```
 
 ***
