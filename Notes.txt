@@ -37,3 +37,23 @@ C9 cDC1
 C10 pDC
 C11 myeloid Platlets 
 C12 moDC
+
+2020_06_28 Comparing CytOF markers with CD8 Clusters
+CD11b/ITGAM - C0
+CD279/PDCD1 C3>>>C1
+CD86 C4
+CD28 C3 > C5
+TIM-3/HAVCR2 C3 >> C1
+LAG3 C3
+CTLA4 C3
+ICOS C3
+4-11BB/TNFRSF9 C3
+GITR/TNFRSF18 C4
+KI-67 C4
+CD38 C4
+CD127/IL7R C5 >> C2
+HLA-DR C3 and C4
+CCR7 C2
+
+Should be able to identify C3 and C4 - C4 being more interesting. 
+
