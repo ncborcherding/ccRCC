@@ -47,7 +47,7 @@ colorblind_vector <- colorRampPalette(c("#FF4B20", "#FFB433", "#C6FDEC", "#7AC5F
 # Initial Subsetting and Analysis
 
 ```{r}
-Tcells <- subset(integrated, Minor == "CD8.T.Cell")
+Tcells <- subset(integrated, Minor == "CD8.T.Cell" | Minor == "Act.T.Cell")
 Tcells <- NormalizeData(Tcells)
 rm(integrated)
 ```
@@ -125,7 +125,7 @@ Tcells <- DietSeurat(Tcells, assays = "RNA")
 T.list <- SplitObject(object = Tcells , split.by = "Run")
 
 for (i in 1:length(T.list)) {
-    T.list[[i]] <- SCTransform(T.list[[i]], verbose = FALSE, conserve.memory=TRUE)
+    T.list[[i]] <- SCTransform(T.list[[i]], verbose = FALSE, conserve.memory=TRUE, vars.to.regress = c("S.Score", "G2M.Score"))
 }
 rm(Tcells)
 ```
@@ -168,7 +168,7 @@ for (i in c(10,15,20,25,30,35,40)) {
     }
 }
 rm(integrated2)
-
+DimPlot(object = integrated2, reduction = 'umap', label = T, group.by = "cloneType") 
 ```
 
 
@@ -176,18 +176,39 @@ rm(integrated2)
 Tcells <- ScaleData(object = Tcells, verbose = FALSE)
 Tcells <- RunPCA(object = Tcells, npcs = 40, verbose = FALSE)
 Tcells <- RunUMAP(object = Tcells, reduction = "pca", 
-    dims = 1:40)
+    dims = 1:30)
 Tcells <- FindNeighbors(object = Tcells, dims = 1:30, force.recalc = T)
 Tcells <- FindClusters(object = Tcells, resolution = 0.6, force.recalc=T)
 ```
 
 ```{r}
+
+
+Tcells <- subset(Tcells, idents = c(0,1,2,3,4,5,6,8))
+
+names <- Tcells[[]]
+names <- rownames(subset(names, newCluster == 5))
+Idents(Tcells, cells = names) <-0
+
+names <- Tcells[[]]
+names <- rownames(subset(names, newCluster == 8))
+Idents(Tcells, cells = names) <-0
+
+names <- Tcells[[]]
+names <- rownames(subset(names, newCluster == 6))
+Idents(Tcells, cells = names) <-5
+
+
+Tcells@active.ident <- factor(Tcells@active.ident, levels = c(0,1,2,3,4,5))
 Tcells@meta.data$newCluster <- Tcells@active.ident
+
 DimPlot(object = Tcells, reduction = 'umap', label = T, ) + NoLegend()
 ggsave(path = "./DataAnalysis/CellType/CD8.Tcells", filename="IntegratedObject_byCluster.eps", width=3.5, height=3)
 DimPlot(object = Tcells, reduction = 'umap', group.by = "type") 
 ggsave(path = "./DataAnalysis/CellType/CD8.Tcells", filename="IntegratedObject_byType.eps", width=3.75, height=3)
 ```
+
+
 
 ```{r}
 freq_table <- table(Tcells@active.ident, Tcells$type)
@@ -287,7 +308,7 @@ DotPlot(Tcells, features = unique(top10$gene)) + coord_flip() +
     scale_color_gradientn(colors = rev(colorblind_vector(11))) + 
     guides(color = F, size = F) +
     scale_size(range = c(0.5,3.5))
-ggsave(path = "DataAnalysis/CellType/CD8.Tcells/markers", file = "Top10_dotplot.eps", height=8, width=3)
+ggsave(path = "DataAnalysis/CellType/CD8.Tcells/markers", file = "Top10_dotplot.eps", height=10, width=3)
 ```
 
 
@@ -416,6 +437,15 @@ mat <- data.frame(markers)
 
 ***
 
+```{r}
+outlier <- as.data.frame(Tcells@reductions$umap@cell.embeddings)
+outlier <- rownames(outlier[outlier$UMAP_1 < -3.9 & outlier$UMAP_2 > 4,])
+names <- rownames(Tcells@reductions$umap@cell.embeddings)
+`%!in%` = Negate(`%in%`)
+names <- names[names %!in% outlier]
+Tcells <- subset(Tcells, cells = names)
+```
+
 # Trajectory
 
 ```{r}
@@ -424,7 +454,7 @@ dir.create("./DataAnalysis/CellType/CD8.Tcells/slingshot")
 
 sce <- as.SingleCellExperiment(Tcells) 
 
-sds <- slingshot(Embeddings(Tcells, "umap"), clusterLabels = Tcells@active.ident, allow.breaks = TRUE, stretch = 0, reducedDim = "UMAP", start.clus = 4, end.clus = 1, shrink.method = "gaussian") #Calcualting the trajectory
+sds <- slingshot(Embeddings(Tcells, "umap"), clusterLabels = Tcells@active.ident, allow.breaks = TRUE, stretch = 0, reducedDim = "UMAP",end.clus = 3) #Calcualting the trajectory
 ```
 
 ```{r}
@@ -486,9 +516,10 @@ top_hvg <- HVFInfo(Tcells) %>%
   pull(bc)
 # Prepare data for random forest
 dat_use <- t(as.matrix(GetAssayData(Tcells, slot = "data"))[top_hvg,])
-dat_use_df <- cbind(slingPseudotime(sds)[,1], dat_use) # Do curve 2, so 2nd columnn
+dat_use_df <- cbind(slingPseudotime(sds)[,2], dat_use) # Do curve 2, so 2nd columnn
 colnames(dat_use_df)[1] <- "pseudotime"
 dat_use_df <- as.data.frame(dat_use_df[!is.na(dat_use_df[,1]),])
+dat_use_df <- janitor::clean_names(dat_use_df)
 
 
 dat_split <- initial_split(dat_use_df)
@@ -539,7 +570,7 @@ ggsave("./DataAnalysis/CellType/CD8.Tcells/slingshot/top20_varImp_scaled.pdf")
 ```{r}
 output <- read.delim("./DataAnalysis/CellType/CD8.Tcells/slingshot/VarImp_model.txt")
 genelist <- c("Cd8a", "Cd8b1", "Cd4", "Cd3d", "Foxp3", "Il2ra", "Il7r", "Ccr7", "Ccl4", "Gata3", "Tbx21",  "Cd44", "Cd28", "Sell", "Fas", "Ctla4", "Pdcd1", "Icos", "Havcr2", "Entpd1", "Tigit", "Cd244", "Eomes", "Cd160", "Il10", "Smad3", "Klrg1", "Itga4", "Ifna1", "Ifng", "Cxcr3", "Ccr5", "Il12rb2", "Il18ra", "Il27a", "Stat1", "Stat4", "Ccr3", "Ccr4", "Ccr6", "Ccr10", "Ccr8", "Stat5", "Stat6", "Il4", "Il5", "Il6", "Il9", "Il10", "Il13", "Il17a", "Il17f", "Il21", "Il22", "Tgfbr2", "Ccl20", "Ccl22", "Rorgt", "Rora", "Rorc", "Stat3", "Tnfsf8", "Tnfrsf4", "Tnfrsf8","Ccl5", "Cxcr5", "Cxcr6", "Maf", "Bcl6", "Gzmb", "Prf1", "Ms4a4b", "Nfat", "Blimp1", "Batf","Il23r", "Top2a", "Birc5", "Cxcl13", "Nkg7", "Gapdh", "Nfkbia", "Igfbp4", "Cxcl2", "Cxcl14", "Ifngr1", "Cd28", "Cd3e", "Cd3g", "Cd52", "Lag3", "Junb", "Fox", "Ifi27l2a", "Ifitm3", "Gzma")
-genelist <- toupper(unique(genelist))
+genelist <- tolower(unique(genelist))
 
 subset_out <- subset(output, X %in% genelist)
 
