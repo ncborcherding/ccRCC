@@ -181,6 +181,7 @@ Tcells <- FindNeighbors(object = Tcells, dims = 1:30, force.recalc = T)
 Tcells <- FindClusters(object = Tcells, resolution = 0.6, force.recalc=T)
 ```
 
+##Mnaually editing cluster assignments and removing outliers
 ```{r}
 
 
@@ -202,6 +203,17 @@ Idents(Tcells, cells = names) <-5
 Tcells@active.ident <- factor(Tcells@active.ident, levels = c(0,1,2,3,4,5))
 Tcells@meta.data$newCluster <- Tcells@active.ident
 
+
+outlier <- as.data.frame(Tcells@reductions$umap@cell.embeddings)
+outlier <- rownames(outlier[outlier$UMAP_1 < -3.9 & outlier$UMAP_2 > 4,])
+names <- rownames(Tcells@reductions$umap@cell.embeddings)
+`%!in%` = Negate(`%in%`)
+names <- names[names %!in% outlier]
+Tcells <- subset(Tcells, cells = names)
+
+```
+
+```{r}
 DimPlot(object = Tcells, reduction = 'umap', label = T, ) + NoLegend()
 ggsave(path = "./DataAnalysis/CellType/CD8.Tcells", filename="IntegratedObject_byCluster.eps", width=3.5, height=3)
 DimPlot(object = Tcells, reduction = 'umap', group.by = "type") 
@@ -436,15 +448,6 @@ mat <- data.frame(markers)
 ```
 
 ***
-
-```{r}
-outlier <- as.data.frame(Tcells@reductions$umap@cell.embeddings)
-outlier <- rownames(outlier[outlier$UMAP_1 < -3.9 & outlier$UMAP_2 > 4,])
-names <- rownames(Tcells@reductions$umap@cell.embeddings)
-`%!in%` = Negate(`%in%`)
-names <- names[names %!in% outlier]
-Tcells <- subset(Tcells, cells = names)
-```
 
 # Trajectory
 
