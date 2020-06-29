@@ -534,6 +534,68 @@ mat <- data.frame(markers)
                 sep="\t",append=F, row.names = FALSE)
 ```
 
+## Visualizing the differential gene expression
+
+```{r}
+
+file_list <- list.files("./DataAnalysis/CellType/APC/DGE/")
+files <- file.path(paste0("./DataAnalysis/CellType/APC/DGE/", file_list))
+
+marker_list <- list()
+for (i in 1:length(files)) {
+    marker_list[[i]] <- read.delim(files[i])
+}
+
+prefix <- suffix <- stringr::str_split(file_list, "_", simplify = T)[,1]
+suffix <- stringr::str_split(file_list, "_", simplify = T)[,3] #Isolate just the cell type
+suffix <- stringr::str_remove(suffix, ".txt") #remove .txt
+suffix <- stringr::str_remove(suffix, " ") #remoce spaces
+names <- paste0(prefix, "_", suffix)
+names(marker_list) <- names #assign the cell type to each element of the list
+```
+
+Going to make 2 different plots, the first will take the percent difference from Myocarditis versus healthy cells and place that delta on the x-axis with fold-change on the y-axis. The other graph will be the typical volcano plot. Gene labeling is based first on siginificance and then on the weight of fold-change + 4xDelta Percent. The latter is such that we want to find genes that are not only upregulated by good markers for myocarditis. 
+
+```{r}
+library(ggrepel)
+dir.create("DataAnalysis/CellType/APC/DGE/visualizations")
+
+for (i in seq_along(marker_list)) {
+tmp <- marker_list[[i]]
+tmp <- tmp %>%
+    mutate(Trend = ifelse(p_val_adj <= 0.05 & avg_logFC > 0, "Up",
+                    ifelse(p_val_adj <= 0.05 & avg_logFC < 0, "Down", "None")))
+filter <- subset(tmp, p_val_adj <= 0.05 & avg_logFC > 0)
+top10 <- filter %>% top_n(n =10, wt = avg_logFC + 4*Difference)
+
+ggplot(tmp, aes(x=Difference, y=avg_logFC)) + 
+  geom_point(size=0.5, color="#999999") + 
+    geom_point(data=subset(tmp, Trend == "Up" | Trend == "Down"), aes(color = Trend), size=0.75) + 
+  theme_classic() + 
+    geom_hline(yintercept = 0, lty = 2) + 
+    geom_vline(xintercept = 0, lty = 2)  + 
+    geom_text_repel(data=subset(tmp, names %in% top10$names), aes(label=names), segment.size = 0.25, size=2.5) + 
+    scale_color_manual(values = rev(colorblind_vector(2)))+
+    guides(color=F)
+ggsave(path = "DataAnalysis/CellType/APC/DGE/visualizations", file = paste0("pctDifference_vs_foldchange_", names(marker_list[i]), ".pdf"), height = 2.5, width=2.5) 
+
+tmp <- tmp %>%
+    mutate(p_val_adj = ifelse(p_val_adj == 0, min(p_val_adj), p_val_adj)) #mutate the p-values that are lower than detection
+
+ggplot(tmp, aes(x=avg_logFC, y=-log10(p_val_adj))) + 
+    geom_point(size=0.5, color="#999999") + 
+    geom_point(data=subset(tmp, Trend == "Up" | Trend == "Down"), aes(color = Trend), size=0.75) + 
+    theme_classic() + 
+    scale_y_sqrt() +
+    geom_vline(xintercept = 0, lty = 2) + 
+    geom_hline(yintercept = 1.3, lty = 2) + 
+    geom_text_repel(data=subset(tmp, names %in% top10$names), aes(label=names), segment.size = 0.25, size=2.5) + 
+    scale_color_manual(values = rev(colorblind_vector(2))) + 
+    guides(color = F)
+ggsave(path = "DataAnalysis/CellType/APC/DGE/visualizations", file = paste0("VolcanoPlot_", names(marker_list[i]), ".pdf"), height = 2.5, width=2.5)
+}
+```
+
 ***
 
 # Trajectory
@@ -544,7 +606,7 @@ dir.create("./DataAnalysis/CellType/APC/slingshot")
 
 sce <- as.SingleCellExperiment(APC) 
 
-sds <- slingshot(Embeddings(APC, "umap"), clusterLabels = APC@active.ident, allow.breaks = TRUE, stretch = 0, reducedDim = "UMAP", start.clus = 4, end.clus = 1, shrink.method = "gaussian") #Calcualting the trajectory
+sds <- slingshot(Embeddings(APC, "umap"), clusterLabels = APC@active.ident, allow.breaks = TRUE, stretch = 0, reducedDim = "UMAP") #Calcualting the trajectory
 ```
 
 ```{r}
@@ -655,30 +717,7 @@ ggsave("./DataAnalysis/CellType/APC/slingshot/top20_varImp_scaled.pdf")
 ```
 
 
-### Importance for T-cell-related genes 
-```{r}
-output <- read.delim("./DataAnalysis/CellType/APC/slingshot/VarImp_model.txt")
-genelist <- c("Cd8a", "Cd8b1", "Cd4", "Cd3d", "Foxp3", "Il2ra", "Il7r", "Ccr7", "Ccl4", "Gata3", "Tbx21",  "Cd44", "Cd28", "Sell", "Fas", "Ctla4", "Pdcd1", "Icos", "Havcr2", "Entpd1", "Tigit", "Cd244", "Eomes", "Cd160", "Il10", "Smad3", "Klrg1", "Itga4", "Ifna1", "Ifng", "Cxcr3", "Ccr5", "Il12rb2", "Il18ra", "Il27a", "Stat1", "Stat4", "Ccr3", "Ccr4", "Ccr6", "Ccr10", "Ccr8", "Stat5", "Stat6", "Il4", "Il5", "Il6", "Il9", "Il10", "Il13", "Il17a", "Il17f", "Il21", "Il22", "Tgfbr2", "Ccl20", "Ccl22", "Rorgt", "Rora", "Rorc", "Stat3", "Tnfsf8", "Tnfrsf4", "Tnfrsf8","Ccl5", "Cxcr5", "Cxcr6", "Maf", "Bcl6", "Gzmb", "Prf1", "Ms4a4b", "Nfat", "Blimp1", "Batf","Il23r", "Top2a", "Birc5", "Cxcl13", "Nkg7", "Gapdh", "Nfkbia", "Igfbp4", "Cxcl2", "Cxcl14", "Ifngr1", "Cd28", "Cd3e", "Cd3g", "Cd52", "Lag3", "Junb", "Fox", "Ifi27l2a", "Ifitm3", "Gzma")
-genelist <- toupper(unique(genelist))
 
-subset_out <- subset(output, X %in% genelist)
-
-ggplot(subset_out, aes(x=reorder(X, Var.Imp), y=Var.Imp)) +
-    geom_bar(stat = "identity") + 
-    theme_classic() + 
-    coord_flip() + 
-    theme(axis.title.y = element_blank())
-ggsave("./DataAnalysis/CellType/APC/slingshot/Filtered_varImp_raw.pdf")
-
-subset_out$Var.Imp <- subset_out$Var.Imp/max(output$Var.Imp)
-
-ggplot(subset_out, aes(x=reorder(X, Var.Imp), y=Var.Imp)) +
-    geom_bar(stat = "identity") + 
-    theme_classic() + 
-    coord_flip() + 
-    theme(axis.title.y = element_blank())
-ggsave("./DataAnalysis/CellType/APC/slingshot/Filtered_varImp_scaled.pdf")
-```
 
 ```{r}
 PT <- as.data.frame(slingPseudotime(sds))
@@ -688,92 +727,7 @@ saveRDS(APC, file = "./data/Processed/APC_FullCluster.rds")
 APC <- readRDS("./data/Processed/APC_FullCluster.rds")
 ```
 
-***
 
-#Clonotype Analysis
-
-```{r}
-dir.create("./DataAnalysis/CellType/APC/clonotype")
-```
-
-
-```{r}
-APC@meta.data$cloneType <- factor(APC@meta.data$cloneType, levels = c("Hyperexpanded (100 < X <= 500)", "Large (20 < X <= 100)", "Medium (5 < X <= 20)", "Small (1 < X <= 5)", "Single (0 < X <= 1)", NA))
-DimPlot(APC, group.by = "cloneType") + scale_color_manual(values = c(colorblind_vector(5)), na.value="grey")
-ggsave(path = "DataAnalysis/CellType/APC/clonotype", filename="IntegratedObject_byClonotypeFreq.eps", width=6.5, height=3)
-```
-
-
-```{r}
-TumorOnly <- subset(APC, orig.ident == "P1" | orig.ident ==  "P2" | orig.ident ==  "P3")
-CD8 <- expression2List(APC, group = "cluster")
-TumorOnly  <- expression2List(TumorOnly,  group = "cluster")
-```
-
-```{r}
-quantContig(CD8, cloneCall="gene+nt", scale = TRUE) + guides(fill = F)
-ggsave("DataAnalysis/CellType/APC/clonotype/UniqueClonotypes.pdf", height=2, width=2.5)
-
-quantContig(TumorOnly, cloneCall="gene+nt", scale = TRUE) + guides(fill = F)
-ggsave("DataAnalysis/CellType/APC/clonotype/UniqueClonotype_TumorOnlys.pdf", height=2, width=2.5)
-```
-
-```{r}
-compareClonotypes(CD8, numbers = 15, 
-                    cloneCall="gene+nt", graph = "alluvial")
-ggsave("DataAnalysis/CellType/APC/clonotype/Alluvial_compare.pdf", height=4, width=20)
-
-compareClonotypes(TumorOnly, numbers = 15, 
-                    cloneCall="gene+nt", graph = "alluvial")
-ggsave("DataAnalysis/CellType/APC/clonotype/Alluvial_compare_TumorOnly.pdf", height=4, width=20)
-```
-
-```{r}
-clonalHomeostasis(CD8, cloneCall = "gene+nt")
-ggsave("DataAnalysis/CellType/APC/clonotype/Clonal_homeostasis.pdf", height=2, width=5)
-
-clonalProportion(CD8, cloneCall = "gene+nt")
-ggsave("DataAnalysis/CellType/APC/clonotype/Clonal_proportion.pdf", height=2, width=5)
-
-clonalOverlap(CD8, cloneCall = "gene+nt", method = "morisita")
-ggsave("DataAnalysis/CellType/APC/clonotype/Clonal_overlap_morisita.pdf", height=3, width=4)
-
-clonalOverlap(CD8, cloneCall = "gene+nt", method = "overlap")
-ggsave("DataAnalysis/CellType/APC/clonotype/Clonal_overlap_overlap.pdf", height=3, width=4)
-
-clonalHomeostasis(TumorOnly, cloneCall = "gene+nt")
-ggsave("DataAnalysis/CellType/APC/clonotype/Clonal_homeostasis_TumorOnly.pdf", height=2, width=5)
-
-clonalProportion(TumorOnly, cloneCall = "gene+nt")
-ggsave("DataAnalysis/CellType/APC/clonotype/Clonal_proportion_TumorOnly.pdf", height=2, width=5)
-
-clonalOverlap(TumorOnly, cloneCall = "gene+nt", method = "morisita")
-ggsave("DataAnalysis/CellType/APC/clonotype/Clonal_overlap_morisita_TumorOnly.pdf", height=3, width=4)
-
-clonalOverlap(TumorOnly, cloneCall = "gene+nt", method = "overlap")
-ggsave("DataAnalysis/CellType/APC/clonotype/Clonal_overlap_overlap_TumorOnly.pdf", height=3, width=4)
-```
-
-```{r}
-clonalDiversity(CD8, cloneCall = "gene+nt", group = "samples")
-ggsave("DataAnalysis/CellType/APC/clonotype/Clonal_Diversity.pdf", height=3, width=4)
-
-clonalDiversity(TumorOnly, cloneCall = "gene+nt", group = "samples")
-ggsave("DataAnalysis/CellType/APC/clonotype/Clonal_Diversity_TumorOnly.pdf", height=3, width=4)
-```
-
-```{r}
-alluvialClonotypes(APC, cloneCall = "gene", 
-                   y.axes = c("Frequency", "type", "newCluster"), 
-                   color = "newCluster") 
-ggsave("DataAnalysis/CellType/APC/clonotype/Clonal_Alluvial.pdf", height=3, width=5)
-
-TumorOnly <- subset(APC, orig.ident == "P1" | orig.ident ==  "P2" | orig.ident ==  "P3")
-alluvialClonotypes(TumorOnly, cloneCall = "gene", 
-                   y.axes = c("Frequency", "type", "newCluster"), 
-                   color = "newCluster") 
-ggsave("DataAnalysis/CellType/APC/clonotype/Clonal_Alluvial_TumorOnly.pdf", height=3, width=5)
-```
 
 ***
 
@@ -782,9 +736,9 @@ ggsave("DataAnalysis/CellType/APC/clonotype/Clonal_Alluvial_TumorOnly.pdf", heig
 ```{r}
 dir.create("./DataAnalysis/CellType/APC/GSEA")
 library(escape)
-GS <- getGeneSets(library = "H")
+GS <- getGeneSets(library = c("H", "C5"))
 ES <- enrichIt(obj = APC, gene.sets = GS, groups = 1000, cores = 4)
-save(ES, file = "./DataAnalysis/CellType/APC/GSEA/H_enrichment.rda")
+save(ES, file = "./DataAnalysis/CellType/APC/GSEA/H_C5_enrichment.rda")
 ```
 
 
@@ -795,12 +749,9 @@ meta <- merge(meta, ES, by = "row.names")
 names <- colnames(ES)
 type_sig <- getSignificance(meta[,c("type",names)], group = "type")
 cluster_sig <- getSignificance(meta[,c("newCluster",names)], group = "newCluster")
-clonotype_sig <- getSignificance(na.omit(meta[,c("cloneType",names)]), group = "cloneType")
-colnames(clonotype_sig)[1:5] <- gsub("\\..*", "", colnames(clonotype_sig)[1:5])
 
 write.table(type_sig , file = "DataAnalysis/CellType/APC/GSEA/lmfit_byType.txt", col.names=NA, sep="\t",append=F)
 write.table(cluster_sig, file = "DataAnalysis/CellType/APC/GSEA/lmfit_byCluster.txt", col.names=NA, sep="\t",append=F)
-write.table(clonotype_sig, file = "DataAnalysis/CellType/APC/GSEA/lmfit_byCloneType.txt", col.names=NA, sep="\t",append=F)
 ```
 
 
