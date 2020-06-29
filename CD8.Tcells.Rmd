@@ -218,6 +218,9 @@ DimPlot(object = Tcells, reduction = 'umap', label = T, ) + NoLegend()
 ggsave(path = "./DataAnalysis/CellType/CD8.Tcells", filename="IntegratedObject_byCluster.eps", width=3.5, height=3)
 DimPlot(object = Tcells, reduction = 'umap', group.by = "type") 
 ggsave(path = "./DataAnalysis/CellType/CD8.Tcells", filename="IntegratedObject_byType.eps", width=3.75, height=3)
+
+DimPlot(object = Tcells, reduction = 'umap', group.by = "Final_clusters") 
+ggsave(path = "./DataAnalysis/CellType/CD8.Tcells", filename="IntegratedObject_byGlobalCluster.eps", width=3.75, height=3)
 ```
 
 
@@ -447,6 +450,68 @@ mat <- data.frame(markers)
                 sep="\t",append=F, row.names = FALSE)
 ```
 
+## Visualizing the differential gene expression
+
+```{r}
+
+file_list <- list.files("./DataAnalysis/CellType/CD8.Tcells/DGE/")
+files <- file.path(paste0("./DataAnalysis/CellType/CD8.Tcells/DGE/", file_list))
+
+marker_list <- list()
+for (i in 1:length(files)) {
+    marker_list[[i]] <- read.delim(files[i])
+}
+
+prefix <- suffix <- stringr::str_split(file_list, "_", simplify = T)[,1]
+suffix <- stringr::str_split(file_list, "_", simplify = T)[,3] #Isolate just the cell type
+suffix <- stringr::str_remove(suffix, ".txt") #remove .txt
+suffix <- stringr::str_remove(suffix, " ") #remoce spaces
+names <- paste0(prefix, "_", suffix)
+names(marker_list) <- names #assign the cell type to each element of the list
+```
+
+Going to make 2 different plots, the first will take the percent difference from Myocarditis versus healthy cells and place that delta on the x-axis with fold-change on the y-axis. The other graph will be the typical volcano plot. Gene labeling is based first on siginificance and then on the weight of fold-change + 4xDelta Percent. The latter is such that we want to find genes that are not only upregulated by good markers for myocarditis. 
+
+```{r}
+library(ggrepel)
+dir.create("DataAnalysis/CellType/CD8.Tcells/DGE/visualizations")
+
+for (i in seq_along(marker_list)) {
+tmp <- marker_list[[i]]
+tmp <- tmp %>%
+    mutate(Trend = ifelse(p_val_adj <= 0.05 & avg_logFC > 0, "Up",
+                    ifelse(p_val_adj <= 0.05 & avg_logFC < 0, "Down", "None")))
+filter <- subset(tmp, p_val_adj <= 0.05 & avg_logFC > 0)
+top10 <- filter %>% top_n(n =10, wt = avg_logFC + 4*Difference)
+
+ggplot(tmp, aes(x=Difference, y=avg_logFC)) + 
+  geom_point(size=0.5, color="#999999") + 
+    geom_point(data=subset(tmp, Trend == "Up" | Trend == "Down"), aes(color = Trend), size=0.75) + 
+  theme_classic() + 
+    geom_hline(yintercept = 0, lty = 2) + 
+    geom_vline(xintercept = 0, lty = 2)  + 
+    geom_text_repel(data=subset(tmp, names %in% top10$names), aes(label=names), segment.size = 0.25, size=2.5) + 
+    scale_color_manual(values = rev(colorblind_vector(2)))+
+    guides(color=F)
+ggsave(path = "DataAnalysis/CellType/CD8.Tcells/DGE/visualizations", file = paste0("pctDifference_vs_foldchange_", names(marker_list[i]), ".pdf"), height = 2.5, width=2.5) 
+
+tmp <- tmp %>%
+    mutate(p_val_adj = ifelse(p_val_adj == 0, min(p_val_adj), p_val_adj)) #mutate the p-values that are lower than detection
+
+ggplot(tmp, aes(x=avg_logFC, y=-log10(p_val_adj))) + 
+    geom_point(size=0.5, color="#999999") + 
+    geom_point(data=subset(tmp, Trend == "Up" | Trend == "Down"), aes(color = Trend), size=0.75) + 
+    theme_classic() + 
+    scale_y_sqrt() +
+    geom_vline(xintercept = 0, lty = 2) + 
+    geom_hline(yintercept = 1.3, lty = 2) + 
+    geom_text_repel(data=subset(tmp, names %in% top10$names), aes(label=names), segment.size = 0.25, size=2.5) + 
+    scale_color_manual(values = rev(colorblind_vector(2))) + 
+    guides(color = F)
+ggsave(path = "DataAnalysis/CellType/CD8.Tcells/DGE/visualizations", file = paste0("VolcanoPlot_", names(marker_list[i]), ".pdf"), height = 2.5, width=2.5)
+}
+```
+
 ***
 
 # Trajectory
@@ -596,10 +661,37 @@ ggsave("./DataAnalysis/CellType/CD8.Tcells/slingshot/Filtered_varImp_scaled.pdf"
 
 ```{r}
 PT <- as.data.frame(slingPseudotime(sds))
-colnames(PT) <- c("PseudoT1", "PseudoT2")
+colnames(PT) <- c("PseudoT1", "PseudoT2", "PseudoT3")
+names <- rownames(PT)
+PT <- PT %>%
+  mutate(PT1 = ifelse(is.na(PseudoT1), "No", "Yes")) %>%
+  mutate(PT2 = ifelse(is.na(PseudoT2), "No", "Yes")) %>%
+  mutate(PT3 = ifelse(is.na(PseudoT3), "No", "Yes")) 
+rownames(PT) <- names
+
 Tcells <- AddMetaData(Tcells, PT)
 saveRDS(Tcells, file = "./data/Processed/CD8.Tcells_FullCluster.rds")
 Tcells <- readRDS("./data/Processed/CD8.Tcells_FullCluster.rds")
+```
+
+
+```{r}
+meta <- Tcells[[]]
+```
+
+
+```{r}
+ggplot(meta, aes(x=type, y = PseudoT1)) +
+  geom_boxplot()
+ggsave("./DataAnalysis/CellType/CD8.Tcells/slingshot/PT1_timeBytype.pdf", height=2, width=3)
+
+ggplot(meta, aes(x=type, y = PseudoT2)) +
+  geom_boxplot()
+ggsave("./DataAnalysis/CellType/CD8.Tcells/slingshot/PT2_timeBytype.pdf", height=2, width=3)
+
+ggplot(meta, aes(x=type, y = PseudoT3)) +
+  geom_boxplot()
+ggsave("./DataAnalysis/CellType/CD8.Tcells/slingshot/PT3_timeBytype.pdf", height=2, width=3)
 ```
 
 ***
@@ -689,6 +781,79 @@ alluvialClonotypes(TumorOnly, cloneCall = "gene",
 ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Clonal_Alluvial_TumorOnly.pdf", height=3, width=5)
 ```
 
+Pseudotime Assignments
+
+
+```{r}
+unique <- stringr::str_sort(as.character(unique(meta[,"PT1"])), numeric = TRUE)
+    df <- NULL
+    for (i in seq_along(unique)) {
+        subset <- subset(meta, meta[,"PT1"] == unique[i])
+        df[[i]] <- subset
+    }
+    names(df) <- unique
+    
+quantContig(df, cloneCall="gene+nt", scale = T) + guides(fill = F)
+ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/UniqueClonotypes_Pseudotime1.pdf", height=2, width=2.5)
+
+clonalHomeostasis(df, cloneCall = "gene+nt")
+ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Clonal_homeostasis_Pseudotime1.pdf", height=2, width=5)
+
+clonalProportion(df, cloneCall = "gene+nt")
+ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Clonal_proportion_Pseudotime1.pdf", height=2, width=5)
+
+unique <- stringr::str_sort(as.character(unique(meta[,"PT2"])), numeric = TRUE)
+    df <- NULL
+    for (i in seq_along(unique)) {
+        subset <- subset(meta, meta[,"PT2"] == unique[i])
+        df[[i]] <- subset
+    }
+    names(df) <- unique
+    
+quantContig(df, cloneCall="gene+nt", scale = T) + guides(fill = F)
+ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/UniqueClonotypes_Pseudotime2.pdf", height=2, width=2.5)
+
+clonalHomeostasis(df, cloneCall = "gene+nt")
+ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Clonal_homeostasis_Pseudotime2.pdf", height=2, width=5)
+
+clonalProportion(df, cloneCall = "gene+nt")
+ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Clonal_proportion_Pseudotime2.pdf", height=2, width=5)
+
+
+unique <- stringr::str_sort(as.character(unique(meta[,"PT3"])), numeric = TRUE)
+    df <- NULL
+    for (i in seq_along(unique)) {
+        subset <- subset(meta, meta[,"PT3"] == unique[i])
+        df[[i]] <- subset
+    }
+    names(df) <- unique
+    
+quantContig(df, cloneCall="gene+nt", scale = T) + guides(fill = F)
+ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/UniqueClonotypes_Pseudotime3.pdf", height=2, width=2.5)
+
+clonalHomeostasis(df, cloneCall = "gene+nt")
+ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Clonal_homeostasis_Pseudotime3.pdf", height=2, width=5)
+
+clonalProportion(df, cloneCall = "gene+nt")
+ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Clonal_proportion_Pseudotime3.pdf", height=2, width=5)
+```
+
+```{r}
+alluvialClonotypes(Tcells, cloneCall = "gene", 
+                   y.axes = c("Frequency", "newCluster", "PT1", "PT2", "PT3"), 
+                   color = "newCluster") 
+ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Clonal_Alluvial_AllPseudotime.pdf", height=3, width=7)
+
+alluvialClonotypes(Tcells, cloneCall = "gene", 
+                   y.axes = c("Frequency", "Run", "PT1", "PT2", "PT3"), 
+                   color = "Run") 
+ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Clonal_Alluvial_AllPseudotime_byRun.pdf", height=3, width=7)
+```
+
+
+
+
+
 ***
 
 #ssGSEA
@@ -696,9 +861,9 @@ ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Clonal_Alluvial_TumorOnly.pdf
 ```{r}
 dir.create("./DataAnalysis/CellType/CD8.Tcells/GSEA")
 library(escape)
-GS <- getGeneSets(library = "H")
+GS <- getGeneSets(library = c("H", "C5"))
 ES <- enrichIt(obj = Tcells, gene.sets = GS, groups = 1000, cores = 4)
-save(ES, file = "./DataAnalysis/CellType/CD8.Tcells/GSEA/H_enrichment.rda")
+save(ES, file = "./DataAnalysis/CellType/CD8.Tcells/GSEA/H_C5_enrichment.rda")
 ```
 
 
@@ -715,6 +880,86 @@ colnames(clonotype_sig)[1:5] <- gsub("\\..*", "", colnames(clonotype_sig)[1:5])
 write.table(type_sig , file = "DataAnalysis/CellType/CD8.Tcells/GSEA/lmfit_byType.txt", col.names=NA, sep="\t",append=F)
 write.table(cluster_sig, file = "DataAnalysis/CellType/CD8.Tcells/GSEA/lmfit_byCluster.txt", col.names=NA, sep="\t",append=F)
 write.table(clonotype_sig, file = "DataAnalysis/CellType/CD8.Tcells/GSEA/lmfit_byCloneType.txt", col.names=NA, sep="\t",append=F)
+```
+
+```{r}
+getSignificance <- function(enriched, group = NULL, fit = "linear.model") {
+    group2 <- enriched[,group]
+    gr_names <- unique(group2)
+    input <- select_if(enriched, is.numeric)
+    output <- NULL
+    if (fit == "linear.model") {
+        group2 <- factor(group2)
+        design <- model.matrix(~ -1 + group2)
+        colnames(design) <- levels(group2)
+        fit <- lmFit(t(input), design)
+        fit <- eBayes(fit)
+        output <- topTable(fit, number = ncol(input))
+    } else if (fit == "T.test") {
+        if (length(unique(group2)) != 2) {
+            stop("Ensure the group selection has only two levels for T.test 
+                fit") 
+        } else {
+        out <- lapply(input, function(x) t.test(x ~ group2))
+        for (i in seq_along(out)) {
+            df <- out[[i]]
+            mat <- c(df$statistic, df$conf.int[[1]], df$conf.int[[2]],
+                        df$estimate[1], df$estimate[2], df$p.value)
+            output <- rbind(output,mat)
+        }
+        output <- as.data.frame(output)
+        colnames(output) <- c("T_statistic", "CI_low", "CI_high", 
+            paste0("mean_", gr_names[1]), paste0("mean_", gr_names[2]), 
+            "p.value")
+        rownames(output) <- colnames(input)
+        output$FDR <- p.adjust(output$p.value) }
+    } else if (fit == "ANOVA") {
+        if (unique(group2) <= 2) {
+            stop("Ensure the group selection has more than two levels 
+                for ANOVA fit") }
+        out <- lapply(input, function(x) aov(x ~ group2))
+        for (i in seq_along(out)) {
+            df <- out[[i]]
+            fval <- summary(df)[[1]]$'F value'[[1]]
+            pval <- summary(df)[[1]]$'Pr(>F)'[[1]]
+            output <- rbind(output,mat)
+        }
+        output <- as.data.frame(output)
+        colnames(output) <- c("f.value", "p.value")
+        rownames(output) <- colnames(input)
+        output$FDR <- p.adjust(output$p.value)
+    }
+    return(output)
+}
+```
+
+```{r}
+PT1_sig <- getSignificance(meta[,c("PT1",names)], group = "PT1", fit = "T.test")
+write.table(PT1_sig , file = "DataAnalysis/CellType/CD8.Tcells/GSEA/lmfit_byPT1.txt", col.names=NA, sep="\t",append=F)
+PT2_sig <- getSignificance(meta[,c("PT2",names)], group = "PT2", fit = "T.test")
+write.table(PT2_sig , file = "DataAnalysis/CellType/CD8.Tcells/GSEA/lmfit_byPT2.txt", col.names=NA, sep="\t",append=F)
+PT3_sig <- getSignificance(meta[,c("PT3",names)], group = "PT3", fit = "T.test")
+write.table(PT3_sig , file = "DataAnalysis/CellType/CD8.Tcells/GSEA/lmfit_byPT3.txt", col.names=NA, sep="\t",append=F)
+```
+
+```{r}
+x <- psych::corr.test(meta[,names], meta$PseudoT1, method = "spearman")
+x <- data.frame(x$r, x$p, x$se, x$t, x$n)
+colnames(x) <- c("rho", "Pval", "SE", "Tval", "n")
+x$FDR <- p.adjust(x$Pval)
+write.table(x , file = "DataAnalysis/CellType/CD8.Tcells/GSEA/Corr_PT1.txt", col.names=NA, sep="\t",append=F)
+
+x <- psych::corr.test(meta[,names], meta$PseudoT2, method = "spearman")
+x <- data.frame(x$r, x$p, x$se, x$t, x$n)
+colnames(x) <- c("rho", "Pval", "SE", "Tval", "n")
+x$FDR <- p.adjust(x$Pval)
+write.table(x , file = "DataAnalysis/CellType/CD8.Tcells/GSEA/Corr_PT2.txt", col.names=NA, sep="\t",append=F)
+
+x <- psych::corr.test(meta[,names], meta$PseudoT3, method = "spearman")
+x <- data.frame(x$r, x$p, x$se, x$t, x$n)
+colnames(x) <- c("rho", "Pval", "SE", "Tval", "n")
+x$FDR <- p.adjust(x$Pval)
+write.table(x , file = "DataAnalysis/CellType/CD8.Tcells/GSEA/Corr_PT3.txt", col.names=NA, sep="\t",append=F)
 ```
 
 
@@ -742,5 +987,6 @@ for (i in seq_along(top10)){
 
 
 ```
+
 
 
