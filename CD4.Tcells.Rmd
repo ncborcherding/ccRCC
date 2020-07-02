@@ -46,6 +46,8 @@ colorblind_vector <- colorRampPalette(c("#FF4B20", "#FFB433", "#C6FDEC", "#7AC5F
 
 # Initial Subsetting and Analysis
 
+We will use the **Minor** variable in the integrated seurat object meta data that we defined in the integration step, filtering for the "CD5.T.Cell" and "Tregs". 
+
 ```{r}
 Tcells <- subset(integrated, Minor == "CD4.T.Cell" | Minor ==  "Treg")
 Tcells <- NormalizeData(Tcells)
@@ -181,14 +183,17 @@ Tcells <- FindNeighbors(object = Tcells, dims = 1:40, force.recalc = T)
 Tcells <- FindClusters(object = Tcells, resolution = 0.4, force.recalc=T)
 ```
 
+### Visualizing the new sub-clusters
+
 ```{r}
 Tcells@meta.data$newCluster <- Tcells@active.ident
-DimPlot(object = Tcells, reduction = 'umap', label = T, ) + NoLegend()
+DimPlot(object = Tcells, reduction = 'umap', label = T) + NoLegend()
 ggsave(path = "./DataAnalysis/CellType/CD4.Tcells", filename="IntegratedObject_byCluster.eps", width=3.5, height=3)
 DimPlot(object = Tcells, reduction = 'umap', group.by = "type") 
 ggsave(path = "./DataAnalysis/CellType/CD4.Tcells", filename="IntegratedObject_byType.eps", width=3.75, height=3)
 ```
 
+Examining the relative proportion on the new clusters
 ```{r}
 freq_table <- table(Tcells@active.ident, Tcells$type)
 
