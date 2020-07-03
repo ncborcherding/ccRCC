@@ -83,94 +83,14 @@ This study ([link to accession](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?a
 
 *Summary:*	**A comprehensive cellular anatomy of normal human kidney is crucial to address the cellular origins of renal disease and renal cancer. Some kidney diseases may be cell type-specific, especially renal tubular cells. To investigate the classification and transcriptomic information of human kidney, we performed a method to obtain single-cell suspension of kidney rapidly, and conducted single-cell RNA sequencing (scRNA-seq). We present scRNA-seq data of 23,366 high quality cells from human kidneys of 3 donors. In this dataset, we show 10 clusters of normal human renal cells. Due to the high quality of single cell transcriptomic information, proximal tubule (PT) cells were classified into 3 subtypes and collecting ducts cells into 2 subtypes. Collectively, our data will provide a reliable reference for the studies of renal cell biology and kidney diseases.**
 
-```{r}
-N2_K <- Read10X("data/GSE131685_RAW/Kidney1/")
-colnames(x = N2_K) <- paste('N2_K', colnames(x = N2_K), sep = '_')
-colnames(x = N2_K) <- stringr::str_remove(colnames(x = N2_K), "-1")
-N2_K <- CreateSeuratObject(N2_K)
-
-N3_K <- Read10X("data/GSE131685_RAW/Kidney2/")
-colnames(x = N3_K) <- paste('N3_K', colnames(x = N3_K), sep = '_')
-colnames(x = N3_K) <- stringr::str_remove(colnames(x = N3_K), "-1")
-N3_K <- CreateSeuratObject(N3_K)
-
-N4_K <- Read10X("data/GSE131685_RAW/Kidney3/")
-colnames(x = N4_K) <- paste('N4_K', colnames(x = N4_K), sep = '_')
-colnames(x = N4_K) <- stringr::str_remove(colnames(x = N4_K), "-1")
-N4_K <- CreateSeuratObject(N4_K)
-```
 
 ***
 
 #Isolate Immune Cells from normal kidney.
 
-Before we integrate all the samples, we will need to isolate the immune cells from the normal kidney runs:
-
 ```{r}
-options(future.globals.maxSize= 2621440000) #Need this to transfer transformation so increasing from 500 Mb to 2.5 Gb - math: 2500*1024^2 bytes
-
-list <- list(N2_K, N3_K, N4_K)
-
-for (i in 1:length(list)) {
-    list[[i]] <-  suppressMessages(SCTransform(list[[i]], verbose = FALSE))
-}
-
-select.features <- SelectIntegrationFeatures(object.list = list, nfeatures = 3000)
-list <- PrepSCTIntegration(object.list = list, anchor.features = select.features, 
-    verbose = FALSE)
-
-#rm(list = c("H1","H2","S1","S2")) #Saving Memory
-
-anchors <- FindIntegrationAnchors(object.list = list, normalization.method = "SCT", 
-    anchor.features = select.features, verbose = FALSE)
-integrated <- IntegrateData(anchorset = anchors, normalization.method = "SCT", 
-    verbose = FALSE)
-rm(list)
-rm(anchors)
-```
-
-## Integrating the normal kidney samples using default parameters.
-```{r}
-integrated <- ScaleData(object = integrated, verbose = FALSE)
-integrated <- RunPCA(object = integrated, npcs = 40, verbose = FALSE)
-integrated <- RunUMAP(object = integrated, reduction = "pca", 
-    dims = 1:30)
-integrated <- FindNeighbors(object = integrated, dims = 1:40, force.recalc = T)
-integrated <- FindClusters(object = integrated, resolution = 0.6, force.recalc=T)
-```
-
-## Using Canonical Immune Markers to Isolate Immune Populations
-```{r}
-dir.create("DataAnalysis/")
-dir.create("DataAnalysis/GSE131685")
-update_geom_defaults("point", list(stroke=0.1))
-DimPlot(object = integrated, reduction = 'umap', label = T) + NoLegend()
-ggsave(path = "DataAnalysis/GSE131685", filename="GSE131685_UMAP_byCluster.eps", width=3.5, height=3)
-
-DimPlot(object = integrated, reduction = 'umap', label = F, group.by = "orig.ident") + NoLegend()
-ggsave(path = "DataAnalysis/GSE131685", filename="GSE131685_UMAP_bySample.eps", width=4, height=3)
-
-
-genelist <- c("CD3D", "CD3G", "CD4", "CD8A", "CD8B", "SELL", "CCR7", "FOXP3", "IL2RA", "IL7R", "CD9", "SDC1", "CD79A", "NCAM1", "NKG7", "CD14", "CD86", "CD80", "CLEC9A", "ITGAX", "ITGAM", "ITGAE", "MS4A1", "PTPRC")
-DefaultAssay(integrated) <- "RNA"
-for (i in 1:length(genelist)) {
-FeaturePlot(object =integrated, features = genelist[i], ncol = 1, min.cutoff="q10",max.cutoff="q90") + NoLegend() + NoGrid() + NoAxes() + scale_color_gradientn(colors = rev(colorblind_vector(13)))
-ggsave(path = "DataAnalysis/GSE131685", filename=paste("GSE131685_", genelist[i], ".pdf", sep=""), width=3.5, height=3)
-}
-```
-
-Based on the expression pattern differences, we will subset the data from 3 clusters - cluster 8 (T Cells), cluster 9 (APCs), and cluster 14 (B cells) and then we call DietSeurat() to just isolate the RNA data so we can now perform the integration across all samples.
-
-```{r}
-immune.cells <- subset(integrated, idents = c(8,9,14))
-immune.cells <- DietSeurat(immune.cells, assays = "RNA")
-```
-
-```{r}
-normalKidney <- SplitObject(immune.cells, split.by = "orig.ident")
-saveRDS(normalKidney, file = "./data/Processed/KidneyImmuneList.rds")
-rm(immune.cells)
-rm(integrated)
+normalKidney <- readRDS("./data/processed/Science2018_RCC_immune.rds")
+normalKidney <- SplitObject(normalKidney, split.by = "orig.ident")
 ```
 
 ***
@@ -233,7 +153,7 @@ Based on the review of the output, we will use the following parameters:
 
 +  UMAP 30
 +  Neighbors 40
-+  Resolution 0.7
++  Resolution 0.8
 
 ```{r}
 integrated <- ScaleData(object = integrated, verbose = FALSE)
@@ -241,7 +161,7 @@ integrated <- RunPCA(object = integrated, npcs = 40, verbose = FALSE)
 integrated <- RunUMAP(object = integrated, reduction = "pca", 
     dims = 1:30)
 integrated <- FindNeighbors(object = integrated, dims = 1:40, force.recalc = T)
-integrated <- FindClusters(object = integrated, resolution = 0.7, force.recalc=T)
+integrated <- FindClusters(object = integrated, resolution = 0.8, force.recalc=T)
 
 
 dir.create("DataAnalysis/UMAP")
@@ -568,10 +488,25 @@ integrated <- combineExpression(combined, integrated)
 
 ```{r}
 #Organizing the order of the factor cloneType
-data@meta.data$cloneType <- factor(data@meta.data$cloneType, levels = c("Hyperexpanded (100 < X <= 500)", "Large (20 < X <= 100)", "Medium (5 < X <= 20)", "Small (1 < X <= 5)", "Single (0 < X <= 1)", NA))
+integrated@meta.data$cloneType <- factor(integrated@meta.data$cloneType, levels = c("Hyperexpanded (100 < X <= 500)", "Large (20 < X <= 100)", "Medium (5 < X <= 20)", "Small (1 < X <= 5)", "Single (0 < X <= 1)", NA))
 update_geom_defaults("point", list(stroke=0.5))
 DimPlot(integrated, group.by = "cloneType") + scale_color_manual(values = c(colorblind_vector(5)), na.value="grey")
 ggsave(path = "DataAnalysis/UMAP", filename="IntegratedObject_byClonotypeFreq.eps", width=6.5, height=3)
+```
+
+```{r}
+x <- table(integrated[[]]$seurat_clusters, integrated[[]]$cloneType, useNA = "ifany")
+
+for (i in 1:nrow(x)) {
+  x[i,] <- x[i,]/sum(x[i,])
+}
+x <- data.frame(x)
+
+ggplot(x, aes(x=Var1, y=Freq, fill = Var2)) +
+  geom_bar(stat="identity", position = "fill") + 
+  scale_fill_manual(values = colorblind_vector(5), na.value="grey") +
+  theme_classic()
+ggsave(path = "DataAnalysis/UMAP", filename="PercentofClonotype.pdf", width=6, height=3)
 ```
 
 *** 
@@ -582,17 +517,13 @@ Based on the 3 different methods, there it appears that there needs to be manual
 
 ```{r, eval=F}
 plot <- DimPlot(integrated, reduction = "umap")
-sc10.cells <- CellSelector(plot=plot)
-
-
-sc9.cells <- CellSelector(plot=plot)
+sc11.cells <- CellSelector(plot=plot)
 meta <- integrated[[]]
-meta <- meta[rownames(meta) %in% sc9.cells, ]
+meta <- meta[rownames(meta) %in% sc11.cells, ]
 meta <- subset(meta, !is.na(cloneType))
-sc9.cells <- rownames(meta)
+sc11.cells <- rownames(meta)
 
-Idents(integrated, cells = sc10.cells) <- 23
-Idents(integrated, cells = sc9.cells) <- 24
+Idents(integrated, cells = sc11.cells) <- 21
 ```
 
 ## Rerun some previous visualizations 
@@ -601,7 +532,8 @@ Now we can regraph some of the previous visualization and write over the former 
 
 ```{r}
 integrated@meta.data$Final_clusters <- Idents(integrated)
-integrated@active.ident <- factor(integrated@active.ident, levels = 0:24)
+integrated@active.ident <- factor(integrated@active.ident, levels = 0:21)
+integrated@meta.data$Final_clusters <- factor(integrated@meta.data$Final_clusters, levels = 0:21)
 
 update_geom_defaults("point", list(size=1, alpha =1, stroke = 0.1))
 DimPlot(object = integrated, reduction = 'umap', label = T) + NoLegend()
@@ -609,20 +541,20 @@ ggsave(path = "DataAnalysis/UMAP", filename="IntegratedObject_byCluster.eps", wi
 
 meta <- integrated[[]]
 freq_table <- meta  %>% 
-  group_by(sample, type, seurat_clusters)  %>% 
+  group_by(sample, type, Final_clusters)  %>% 
   summarise(n=n())
 
-ggplot(freq_table, aes(x=seurat_clusters, y=n, fill = type)) + 
+ggplot(freq_table, aes(x=Final_clusters, y=n, fill = type)) + 
   stat_summary(geom="bar", position = "fill") + 
   theme_classic()
 ggsave(path = "DataAnalysis/UMAP", filename="ClusterBreakdown_byType_unscaled.pdf", width=4, height=2)
 
-ggplot(freq_table, aes(x=seurat_clusters, y=n, fill = sample)) + 
+ggplot(freq_table, aes(x=Final_clusters, y=n, fill = sample)) + 
   stat_summary(geom="bar", position = "fill") + 
   theme_classic()
 ggsave(path = "DataAnalysis/UMAP", filename="ClusterBreakdown_bySample_unscaled.pdf", width=4, height=2)
 
-freq_table <- table(meta$seurat_clusters, meta$type)
+freq_table <- table(meta$Final_clusters, meta$type)
 for (i in 1:ncol(freq_table)) {
   freq_table[,i] <- freq_table[,i]/sum(freq_table[,i])
 }
@@ -633,7 +565,7 @@ ggplot(freq_table, aes(x=as.factor(Var1), y=value, fill = Var2)) +
   theme_classic()
 ggsave(path = "DataAnalysis/UMAP", filename="ClusterBreakdown_byType_Scale.pdf", width=4, height=2)
 
-freq_table <- table(meta$seurat_clusters, meta$sample)
+freq_table <- table(meta$Final_clusters, meta$sample)
 for (i in 1:ncol(freq_table)) {
   freq_table[,i] <- freq_table[,i]/sum(freq_table[,i])
 }
