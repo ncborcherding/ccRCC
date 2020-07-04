@@ -951,30 +951,50 @@ write.table(x , file = "DataAnalysis/CellType/CD8.Tcells/GSEA/Corr_PT3.txt", col
 ```
 
 
+***
+
+Russ requested pathways
+
 ```{r}
-top10 <- cluster_sig %>% top_n(10, wt=F)
-top10 <- rownames(top10)
+sign <- read.delim("./data/immune_sign.txt")[,1:20]
+sign <- as.list(sign)
+melanoma <- read.delim("./data/melanoma_GS.txt")
+melanoma <- as.list(melanoma)
+```
 
-for (i in seq_along(top10)){
-  ridgeEnrichment(meta, gene.set = top10[i], group = "newCluster", add.rug = TRUE) + facet_grid(.~type)
-  ggsave(path = "DataAnalysis/CellType/CD8.Tcells/GSEA/", file = paste0("Ridge_ClusterTop10_TypevsCluster_", top10[i], ".pdf"), height=3, width=5)
+```{r}
+
+full <- c(sign, melanoma)
+unique <- names(full) 
+list <- list()
+for (i in seq_along(unique)) {
+    tmp <- full[[i]]
+    tmp <- tmp[tmp != ""]
+    tmp <- unique(toupper(tmp))
+    tmp <- GSEABase::GeneSet(tmp, setName=paste(unique[i]))
+    list[[i]] <- tmp
+    
 }
 
-for (i in seq_along(top10)){
-  ridgeEnrichment(meta, gene.set = top10[i], group = "newCluster", add.rug = TRUE) 
-  ggsave(path = "DataAnalysis/CellType/CD8.Tcells/GSEA/", file = paste0("Ridge_ClusterTop10_Cluster_", top10[i], ".pdf"), height=3, width=5)
-}
-
-
-top10 <- type_sig %>% top_n(10, wt=F)
-top10 <- rownames(top10)
-for (i in seq_along(top10)){
-  ridgeEnrichment(meta, gene.set = top10[i], group = "type", add.rug = TRUE)
-  ggsave(path = "DataAnalysis/CellType/CD8.Tcells/GSEA/", file = paste0("Ridge_ClusterTop10_Type_", top10[i], ".pdf"), height=3, width=5)
-}
-
-
+list <- GSEABase::GeneSetCollection(list)
 ```
 
 
+```{r}
+ES2 <- enrichIt(obj = Tcells, gene.sets = list, groups = 1000, cores = 4)
+save(ES2, file = "./DataAnalysis/CellType/CD8.Tcells/GSEA/Requested_enrichment.rda")
+```
+
+```{r}
+Tcells <- AddMetaData(Tcells, ES2)
+```
+
+```{r}
+for (i in seq_along(unique)) {
+  plot <- FeaturePlot(Tcells, features = unique[i]) + 
+  scale_color_gradientn(colors = rev(colorblind_vector(11)))
+  plot <- plot + NoLegend()
+  ggsave(path = "./DataAnalysis/CellType/CD8.Tcells/GSEA", filename=paste0(unique[i], ".eps"), plot, width=3.5, height=3)
+}
+```
 
