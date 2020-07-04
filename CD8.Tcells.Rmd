@@ -47,7 +47,7 @@ colorblind_vector <- colorRampPalette(c("#FF4B20", "#FFB433", "#C6FDEC", "#7AC5F
 # Initial Subsetting and Analysis
 
 ```{r}
-Tcells <- subset(integrated, Minor == "CD8.T.Cell" | Minor == "Act.T.Cell")
+Tcells <- subset(integrated, Minor == "CD8.T.Cell")
 Tcells <- NormalizeData(Tcells)
 rm(integrated)
 ```
@@ -58,62 +58,6 @@ dir.create("./DataAnalysis/CellType/CD8.Tcells")
 ```
 
 
-## Cell Cycle 
-
-Cell cycle regression as described in the [Satija lab website](https://satijalab.org/seurat/v3.1/cell_cycle_vignette.html).  
-
-```{r}
-cc.genes <- Seurat::cc.genes.updated.2019
-s.genes <- cc.genes$s.genes
-g2m.genes <- cc.genes$g2m.genes
-```
-
-Now we can perform cell cycle scoring with the genes. For now, I am not going to regress using the assingments or save the integrated object with the calculations.
-
-```{r}
-Tcells <- CellCycleScoring(Tcells, s.features = s.genes, g2m.features = g2m.genes, set.ident = FALSE)
-```
-
-Like above with the contribution by condition (**type**), we can now look at the phases assignments by cluster and condition. We do not need to scale if we seperate **type** into seperate bar graphs.
-
-```{r}
-dir.create("./DataAnalysis/CellType/CD8.Tcells/CellCycle")
-freq_table <- Tcells[[]]
-freq_table <- freq_table[,c("type", "Final_clusters", "Phase")]
-freq_table <- subset(freq_table, Phase != "Undecided") #removing undecided phases
-freq_table <- freq_table %>%
-    group_by(type, Final_clusters, Phase) %>%
-    summarise(n = n())
-
-freq_table$Phase <- factor(freq_table$Phase, levels = c("G1", "S", "G2M")) #ordering phases
-freq_table$Final_clusters <- factor(freq_table$Final_clusters, levels = c(1,2,3,8,12,13,14,17,18,21,23,24))
-
-ggplot(freq_table, aes(x=Final_clusters, y=n, fill=Phase)) + 
-  geom_bar(stat="identity", position="fill", color="black", lwd=0.25) + 
-  theme(axis.title.x = element_blank())+ 
-    facet_grid(type ~.) + 
-   scale_fill_manual(values=colorblind_vector(3)) + 
-  theme_classic()
-ggsave(path = "./DataAnalysis/CellType/CD8.Tcells/CellCycle", file = "CellCycle_byCluster_byType.pdf", height=6, width=6)
-
-ggplot(freq_table, aes(x=Final_clusters, y=n, fill=Phase)) + 
-  stat_summary(geom="bar", position="fill", color="black", lwd=0.25) + 
-  theme(axis.title.x = element_blank())+ 
-   scale_fill_manual(values=colorblind_vector(3)) + 
-  theme_classic()
-ggsave(path = "./DataAnalysis/CellType/CD8.Tcells/CellCycle", file = "CellCycle_byCluster.pdf", height=2, width=6)
-```
-
-
-```{r}
-Tcells$Phase <- factor(Tcells$Phase, levels = c("G1", "S", "G2M")) #ordering phases
-DimPlot(object = Tcells, reduction = 'umap', group.by = "Phase", split.by = "type") +
-    scale_color_manual(values=colorblind_vector(3)) 
-
-
-ggsave(path = "./DataAnalysis/CellType/CD8.Tcells/CellCycle", filename="CellCycle_UMAP_byType.eps", width=10.5, height=3)
-```
-
 ## Reclustering 
 
 Isolating just the T cells, stripping the seurat object of non-"RNA" values using *DietSeurat()* and then spliting the object to create a list that can be fed into **SCTransform()**
@@ -122,10 +66,10 @@ Tcells@meta.data$Run <- paste0(Tcells@meta.data$sample, "_", Tcells@meta.data$ty
 Tcells[["percent.mt"]] <- PercentageFeatureSet(Tcells, pattern = "^MT-") #Calculate %mito
 
 Tcells <- DietSeurat(Tcells, assays = "RNA")
-T.list <- SplitObject(object = Tcells , split.by = "Run")
+T.list <- SplitObject(object = Tcells , split.by = "sample")
 
 for (i in 1:length(T.list)) {
-    T.list[[i]] <- SCTransform(T.list[[i]], verbose = FALSE, conserve.memory=TRUE, vars.to.regress = c("S.Score", "G2M.Score"))
+    T.list[[i]] <- SCTransform(T.list[[i]], verbose = FALSE, conserve.memory=TRUE)
 }
 rm(Tcells)
 ```
@@ -168,7 +112,7 @@ for (i in c(10,15,20,25,30,35,40)) {
     }
 }
 rm(integrated2)
-DimPlot(object = integrated2, reduction = 'umap', label = T, group.by = "cloneType") 
+
 ```
 
 
@@ -176,44 +120,34 @@ DimPlot(object = integrated2, reduction = 'umap', label = T, group.by = "cloneTy
 Tcells <- ScaleData(object = Tcells, verbose = FALSE)
 Tcells <- RunPCA(object = Tcells, npcs = 40, verbose = FALSE)
 Tcells <- RunUMAP(object = Tcells, reduction = "pca", 
-    dims = 1:30)
-Tcells <- FindNeighbors(object = Tcells, dims = 1:30, force.recalc = T)
-Tcells <- FindClusters(object = Tcells, resolution = 0.6, force.recalc=T)
+    dims = 1:40)
+Tcells <- FindNeighbors(object = Tcells, dims = 1:40, force.recalc = T)
+Tcells <- FindClusters(object = Tcells, resolution = 0.8, force.recalc=T)
+```
+
+
+```{r}
+DimPlot(object = Tcells, reduction = 'umap', label = T, group.by = "sample") 
+DimPlot(object = Tcells, reduction = 'umap', label = T) 
 ```
 
 ##Mnaually editing cluster assignments and removing outliers
 ```{r}
 
 
-Tcells <- subset(Tcells, idents = c(0,1,2,3,4,5,6,8))
+Tcells <- subset(Tcells, idents = c(0,1,2,3,4,5,6,8,11)) #Cluster 9 and 10 have > 90% NA clonotype
 
-names <- Tcells[[]]
-names <- rownames(subset(names, newCluster == 5))
-Idents(Tcells, cells = names) <-0
+plot <- DimPlot(Tcells, reduction = "umap")
+sc4.cells <- CellSelector(plot=plot)
+Tcells <- subset(Tcells, cells = sc4.cells, invert = TRUE)
 
-names <- Tcells[[]]
-names <- rownames(subset(names, newCluster == 8))
-Idents(Tcells, cells = names) <-0
-
-names <- Tcells[[]]
-names <- rownames(subset(names, newCluster == 6))
-Idents(Tcells, cells = names) <-5
-
-
-Tcells@active.ident <- factor(Tcells@active.ident, levels = c(0,1,2,3,4,5))
-Tcells@meta.data$newCluster <- Tcells@active.ident
-
-
-outlier <- as.data.frame(Tcells@reductions$umap@cell.embeddings)
-outlier <- rownames(outlier[outlier$UMAP_1 < -3.9 & outlier$UMAP_2 > 4,])
-names <- rownames(Tcells@reductions$umap@cell.embeddings)
-`%!in%` = Negate(`%in%`)
-names <- names[names %!in% outlier]
-Tcells <- subset(Tcells, cells = names)
-
+sc11.cells <- which(Idents(Tcells) == 11)
+sc11.cells <- names(Idents(Tcells))[sc11.cells]
+Idents(Tcells, cells = sc11.cells) <- 9
 ```
 
 ```{r}
+Tcells@meta.data$newCluster <- Tcells@active.ident
 DimPlot(object = Tcells, reduction = 'umap', label = T, ) + NoLegend()
 ggsave(path = "./DataAnalysis/CellType/CD8.Tcells", filename="IntegratedObject_byCluster.eps", width=3.5, height=3)
 DimPlot(object = Tcells, reduction = 'umap', group.by = "type") 
@@ -260,7 +194,61 @@ ggsave(path = "DataAnalysis/CellType/CD8.Tcells/", file = "totalContribution_byC
 
 ```
 
+## Cell Cycle 
 
+Cell cycle regression as described in the [Satija lab website](https://satijalab.org/seurat/v3.1/cell_cycle_vignette.html).  
+
+```{r}
+cc.genes <- Seurat::cc.genes.updated.2019
+s.genes <- cc.genes$s.genes
+g2m.genes <- cc.genes$g2m.genes
+```
+
+Now we can perform cell cycle scoring with the genes. For now, I am not going to regress using the assingments or save the integrated object with the calculations.
+
+```{r}
+DefaultAssay(Tcells) <- "RNA"
+Tcells <- CellCycleScoring(Tcells, s.features = s.genes, g2m.features = g2m.genes, set.ident = FALSE)
+```
+
+Like above with the contribution by condition (**type**), we can now look at the phases assignments by cluster and condition. We do not need to scale if we seperate **type** into seperate bar graphs.
+
+```{r}
+dir.create("./DataAnalysis/CellType/CD8.Tcells/CellCycle")
+freq_table <- Tcells[[]]
+freq_table <- freq_table[,c("type", "newCluster", "Phase")]
+freq_table <- subset(freq_table, Phase != "Undecided") #removing undecided phases
+freq_table <- freq_table %>%
+    group_by(type, newCluster, Phase) %>%
+    summarise(n = n())
+
+freq_table$Phase <- factor(freq_table$Phase, levels = c("G1", "S", "G2M")) #ordering phases
+
+ggplot(freq_table, aes(x=newCluster, y=n, fill=Phase)) + 
+  geom_bar(stat="identity", position="fill", color="black", lwd=0.25) + 
+  theme(axis.title.x = element_blank())+ 
+    facet_grid(type ~.) + 
+   scale_fill_manual(values=colorblind_vector(3)) + 
+  theme_classic()
+ggsave(path = "./DataAnalysis/CellType/CD4.Tcells/CellCycle", file = "CellCycle_byCluster_byType.pdf", height=6, width=6)
+
+ggplot(freq_table, aes(x=newCluster, y=n, fill=Phase)) + 
+  stat_summary(geom="bar", position="fill", color="black", lwd=0.25) + 
+  theme(axis.title.x = element_blank())+ 
+   scale_fill_manual(values=colorblind_vector(3)) + 
+  theme_classic()
+ggsave(path = "./DataAnalysis/CellType/CD4.Tcells/CellCycle", file = "CellCycle_byCluster.pdf", height=2, width=6)
+```
+
+
+```{r}
+Tcells$Phase <- factor(Tcells$Phase, levels = c("G1", "S", "G2M")) #ordering phases
+DimPlot(object = Tcells, reduction = 'umap', group.by = "Phase", split.by = "type") +
+    scale_color_manual(values=colorblind_vector(3)) 
+
+
+ggsave(path = "./DataAnalysis/CellType/CD4.Tcells/CellCycle", filename="CellCycle_UMAP_byType.eps", width=10.5, height=3)
+```
 ###Expression Markers in T cells
 
 Like above we also want to look at the expression markers that define clusters and T cell subtypes. First we will make the schex-based reductions. 
@@ -298,6 +286,7 @@ for (i in seq_along(genelist)) {
 We can also look at the top markers for each cluster by using the *FindAllMarkers()* call.
 
 ```{r}
+Tcells  <- NormalizeData(Tcells, assay = "RNA")
 All.markers <- FindAllMarkers(Tcells, assay = "RNA", pseudocount.use = 0.1, only.pos = T) 
 write.table(All.markers, file = "DataAnalysis/CellType/CD8.Tcells/markers/FindAllMarkers_output.txt", col.names=NA, sep="\t",append=F)
 ```
@@ -368,7 +357,7 @@ DefaultAssay(TumorOnly) <- "RNA"
 TumorOnly <- subset(Tcells, orig.ident == "P1" | orig.ident ==  "P2" | orig.ident ==  "P3")
 clusters <- as.character(unique(TumorOnly@active.ident))
 mat <- NULL
-for (i in seq_along(clusters)) {
+for (i in c(1,2,4:7)) {
     tmp <- subset(TumorOnly, idents = clusters[i])
     tmp <- NormalizeData(tmp, assay = "RNA") #after subset always normalize RNA
     tmp <- SetIdent(tmp, value = tmp@meta.data$type)
@@ -454,7 +443,7 @@ mat <- data.frame(markers)
 
 ```{r}
 
-file_list <- list.files("./DataAnalysis/CellType/CD8.Tcells/DGE/")
+file_list <- list.files("./DataAnalysis/CellType/CD8.Tcells/DGE/", pattern = ".txt")
 files <- file.path(paste0("./DataAnalysis/CellType/CD8.Tcells/DGE/", file_list))
 
 marker_list <- list()
@@ -522,7 +511,7 @@ dir.create("./DataAnalysis/CellType/CD8.Tcells/slingshot")
 
 sce <- as.SingleCellExperiment(Tcells) 
 
-sds <- slingshot(Embeddings(Tcells, "umap"), clusterLabels = Tcells@active.ident, allow.breaks = TRUE, stretch = 0, reducedDim = "UMAP",end.clus = 3) #Calcualting the trajectory
+sds <- slingshot(Embeddings(Tcells, "umap"), clusterLabels = Tcells@active.ident, allow.breaks = TRUE, stretch = 2, reducedDim = "UMAP", start.clus = 4, end.clus = 0) #Calcualting the trajectory
 ```
 
 ```{r}
@@ -661,12 +650,13 @@ ggsave("./DataAnalysis/CellType/CD8.Tcells/slingshot/Filtered_varImp_scaled.pdf"
 
 ```{r}
 PT <- as.data.frame(slingPseudotime(sds))
-colnames(PT) <- c("PseudoT1", "PseudoT2", "PseudoT3")
+colnames(PT) <- c("PseudoT1", "PseudoT2", "PseudoT3", "PseudoT4")
 names <- rownames(PT)
 PT <- PT %>%
   mutate(PT1 = ifelse(is.na(PseudoT1), "No", "Yes")) %>%
   mutate(PT2 = ifelse(is.na(PseudoT2), "No", "Yes")) %>%
-  mutate(PT3 = ifelse(is.na(PseudoT3), "No", "Yes")) 
+  mutate(PT3 = ifelse(is.na(PseudoT3), "No", "Yes")) %>%
+  mutate(PT4 = ifelse(is.na(PseudoT4), "No", "Yes"))
 rownames(PT) <- names
 
 Tcells <- AddMetaData(Tcells, PT)
@@ -677,10 +667,7 @@ Tcells <- readRDS("./data/Processed/CD8.Tcells_FullCluster.rds")
 
 ```{r}
 meta <- Tcells[[]]
-```
 
-
-```{r}
 ggplot(meta, aes(x=type, y = PseudoT1)) +
   geom_boxplot()
 ggsave("./DataAnalysis/CellType/CD8.Tcells/slingshot/PT1_timeBytype.pdf", height=2, width=3)
@@ -699,6 +686,7 @@ ggsave("./DataAnalysis/CellType/CD8.Tcells/slingshot/PT3_timeBytype.pdf", height
 #Clonotype Analysis
 
 ```{r}
+library(scRepertoire)
 dir.create("./DataAnalysis/CellType/CD8.Tcells/clonotype")
 ```
 
@@ -860,7 +848,7 @@ ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Clonal_Alluvial_AllPseudotime
 
 ```{r}
 dir.create("./DataAnalysis/CellType/CD8.Tcells/GSEA")
-library(escape)
+#library(escape)
 GS <- getGeneSets(library = c("H", "C5"))
 ES <- enrichIt(obj = Tcells, gene.sets = GS, groups = 1000, cores = 4)
 save(ES, file = "./DataAnalysis/CellType/CD8.Tcells/GSEA/H_C5_enrichment.rda")

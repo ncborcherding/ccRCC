@@ -60,61 +60,7 @@ dir.create("./DataAnalysis/CellType/CD4.Tcells")
 ```
 
 
-## Cell Cycle 
 
-Cell cycle regression as described in the [Satija lab website](https://satijalab.org/seurat/v3.1/cell_cycle_vignette.html).  
-
-```{r}
-cc.genes <- Seurat::cc.genes.updated.2019
-s.genes <- cc.genes$s.genes
-g2m.genes <- cc.genes$g2m.genes
-```
-
-Now we can perform cell cycle scoring with the genes. For now, I am not going to regress using the assingments or save the integrated object with the calculations.
-
-```{r}
-Tcells <- CellCycleScoring(Tcells, s.features = s.genes, g2m.features = g2m.genes, set.ident = FALSE)
-```
-
-Like above with the contribution by condition (**type**), we can now look at the phases assignments by cluster and condition. We do not need to scale if we seperate **type** into seperate bar graphs.
-
-```{r}
-dir.create("./DataAnalysis/CellType/CD4.Tcells/CellCycle")
-freq_table <- Tcells[[]]
-freq_table <- freq_table[,c("type", "Final_clusters", "Phase")]
-freq_table <- subset(freq_table, Phase != "Undecided") #removing undecided phases
-freq_table <- freq_table %>%
-    group_by(type, Final_clusters, Phase) %>%
-    summarise(n = n())
-
-freq_table$Phase <- factor(freq_table$Phase, levels = c("G1", "S", "G2M")) #ordering phases
-freq_table$Final_clusters <- factor(freq_table$Final_clusters, levels = c(1,2,3,8,12,13,14,17,18,21,23,24))
-
-ggplot(freq_table, aes(x=Final_clusters, y=n, fill=Phase)) + 
-  geom_bar(stat="identity", position="fill", color="black", lwd=0.25) + 
-  theme(axis.title.x = element_blank())+ 
-    facet_grid(type ~.) + 
-   scale_fill_manual(values=colorblind_vector(3)) + 
-  theme_classic()
-ggsave(path = "./DataAnalysis/CellType/CD4.Tcells/CellCycle", file = "CellCycle_byCluster_byType.pdf", height=6, width=6)
-
-ggplot(freq_table, aes(x=Final_clusters, y=n, fill=Phase)) + 
-  stat_summary(geom="bar", position="fill", color="black", lwd=0.25) + 
-  theme(axis.title.x = element_blank())+ 
-   scale_fill_manual(values=colorblind_vector(3)) + 
-  theme_classic()
-ggsave(path = "./DataAnalysis/CellType/CD4.Tcells/CellCycle", file = "CellCycle_byCluster.pdf", height=2, width=6)
-```
-
-
-```{r}
-Tcells$Phase <- factor(Tcells$Phase, levels = c("G1", "S", "G2M")) #ordering phases
-DimPlot(object = Tcells, reduction = 'umap', group.by = "Phase", split.by = "type") +
-    scale_color_manual(values=colorblind_vector(3)) 
-
-
-ggsave(path = "./DataAnalysis/CellType/CD4.Tcells/CellCycle", filename="CellCycle_UMAP_byType.eps", width=10.5, height=3)
-```
 
 ## Reclustering 
 
@@ -181,6 +127,7 @@ Tcells <- RunUMAP(object = Tcells, reduction = "pca",
     dims = 1:35)
 Tcells <- FindNeighbors(object = Tcells, dims = 1:40, force.recalc = T)
 Tcells <- FindClusters(object = Tcells, resolution = 0.4, force.recalc=T)
+Tcells <- subset(Tcells, idents = c(0,1,2,3,4,5,6,7))
 ```
 
 ### Visualizing the new sub-clusters
@@ -229,6 +176,61 @@ ggsave(path = "DataAnalysis/CellType/CD4.Tcells/", file = "totalContribution_byC
 
 ```
 
+## Cell Cycle 
+
+Cell cycle regression as described in the [Satija lab website](https://satijalab.org/seurat/v3.1/cell_cycle_vignette.html).  
+
+```{r}
+cc.genes <- Seurat::cc.genes.updated.2019
+s.genes <- cc.genes$s.genes
+g2m.genes <- cc.genes$g2m.genes
+```
+
+Now we can perform cell cycle scoring with the genes. For now, I am not going to regress using the assingments or save the integrated object with the calculations.
+
+```{r}
+Tcells <- CellCycleScoring(Tcells, s.features = s.genes, g2m.features = g2m.genes, set.ident = FALSE)
+```
+
+Like above with the contribution by condition (**type**), we can now look at the phases assignments by cluster and condition. We do not need to scale if we seperate **type** into seperate bar graphs.
+
+```{r}
+dir.create("./DataAnalysis/CellType/CD4.Tcells/CellCycle")
+freq_table <- Tcells[[]]
+freq_table <- freq_table[,c("type", "Final_clusters", "Phase")]
+freq_table <- subset(freq_table, Phase != "Undecided") #removing undecided phases
+freq_table <- freq_table %>%
+    group_by(type, Final_clusters, Phase) %>%
+    summarise(n = n())
+
+freq_table$Phase <- factor(freq_table$Phase, levels = c("G1", "S", "G2M")) #ordering phases
+freq_table$Final_clusters <- factor(freq_table$Final_clusters, levels = c(1,2,3,8,12,13,14,17,18,21,23,24))
+
+ggplot(freq_table, aes(x=Final_clusters, y=n, fill=Phase)) + 
+  geom_bar(stat="identity", position="fill", color="black", lwd=0.25) + 
+  theme(axis.title.x = element_blank())+ 
+    facet_grid(type ~.) + 
+   scale_fill_manual(values=colorblind_vector(3)) + 
+  theme_classic()
+ggsave(path = "./DataAnalysis/CellType/CD4.Tcells/CellCycle", file = "CellCycle_byCluster_byType.pdf", height=6, width=6)
+
+ggplot(freq_table, aes(x=Final_clusters, y=n, fill=Phase)) + 
+  stat_summary(geom="bar", position="fill", color="black", lwd=0.25) + 
+  theme(axis.title.x = element_blank())+ 
+   scale_fill_manual(values=colorblind_vector(3)) + 
+  theme_classic()
+ggsave(path = "./DataAnalysis/CellType/CD4.Tcells/CellCycle", file = "CellCycle_byCluster.pdf", height=2, width=6)
+```
+
+
+```{r}
+Tcells$Phase <- factor(Tcells$Phase, levels = c("G1", "S", "G2M")) #ordering phases
+DimPlot(object = Tcells, reduction = 'umap', group.by = "Phase", split.by = "type") +
+    scale_color_manual(values=colorblind_vector(3)) 
+
+
+ggsave(path = "./DataAnalysis/CellType/CD4.Tcells/CellCycle", filename="CellCycle_UMAP_byType.eps", width=10.5, height=3)
+```
 
 ###Expression Markers in T cells
 
@@ -337,7 +339,7 @@ DefaultAssay(TumorOnly) <- "RNA"
 TumorOnly <- subset(Tcells, orig.ident == "P1" | orig.ident == "P2" | orig.ident == "P3")
 clusters <- as.character(unique(TumorOnly@active.ident))
 mat <- NULL
-for (i in seq_along(clusters)) {
+for (i in c(1,2,4,5,8)) {
     tmp <- subset(TumorOnly, idents = clusters[i])
     tmp <- NormalizeData(tmp, assay = "RNA") #after subset always normalize RNA
     tmp <- SetIdent(tmp, value = tmp@meta.data$type)
@@ -429,7 +431,7 @@ dir.create("./DataAnalysis/CellType/CD4.Tcells/slingshot")
 
 sce <- as.SingleCellExperiment(Tcells) 
 
-sds <- slingshot(Embeddings(Tcells, "umap"), clusterLabels = Tcells@active.ident, allow.breaks = TRUE, stretch = 0, reducedDim = "UMAP", start.clus = 0, shrink.method = "gaussian") #Calcualting the trajectory
+sds <- slingshot(Embeddings(Tcells, "umap"), clusterLabels = Tcells@active.ident, allow.breaks = TRUE, stretch = 0, reducedDim = "UMAP") #Calcualting the trajectory
 ```
 
 ```{r}
@@ -593,7 +595,7 @@ ggsave(path = "DataAnalysis/CellType/CD4.Tcells/clonotype", filename="Integrated
 TumorOnly <- subset(Tcells, orig.ident == "P1" | orig.ident ==  "P2" | orig.ident ==  "P3")
 CD4 <- expression2List(Tcells, group = "cluster")
 TumorOnly  <- expression2List(TumorOnly,  group = "cluster")
- ```
+```
 
 ```{r}
 quantContig(CD4, cloneCall="gene+nt", scale = TRUE) + guides(fill = F)
@@ -667,9 +669,9 @@ ggsave("DataAnalysis/CellType/CD4.Tcells/clonotype/Clonal_Alluvial_TumorOnly.pdf
 ```{r}
 dir.create("./DataAnalysis/CellType/CD4.Tcells/GSEA")
 library(escape)
-GS <- getGeneSets(library = "H")
+GS <- getGeneSets(library = c("H", "C5"))
 ES <- enrichIt(obj = Tcells, gene.sets = GS, groups = 1000, cores = 4)
-save(ES, file = "./DataAnalysis/CellType/CD4.Tcells/GSEA/H_enrichment.rda")
+save(ES, file = "./DataAnalysis/CellType/CD4.Tcells/GSEA/HC5_enrichment.rda")
 ```
 
 
