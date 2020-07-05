@@ -81,7 +81,7 @@ P3_T <- CreateSeuratObject(P3_T)
 ## Whole kidney Single-cell RNA sequencing 
 This study ([link to accession](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE131685)) has single-cell sequencing of both renal tissue and immune cells from 3 healthy donors
 
-*Summary:*	**A comprehensive cellular anatomy of normal human kidney is crucial to address the cellular origins of renal disease and renal cancer. Some kidney diseases may be cell type-specific, especially renal tubular cells. To investigate the classification and transcriptomic information of human kidney, we performed a method to obtain single-cell suspension of kidney rapidly, and conducted single-cell RNA sequencing (scRNA-seq). We present scRNA-seq data of 23,366 high quality cells from human kidneys of 3 donors. In this dataset, we show 10 clusters of normal human renal cells. Due to the high quality of single cell transcriptomic information, proximal tubule (PT) cells were classified into 3 subtypes and collecting ducts cells into 2 subtypes. Collectively, our data will provide a reliable reference for the studies of renal cell biology and kidney diseases.**
+*Summary:*	**A comprehensive cellular anatomy of normal human kidney is crucial to address the cellular origins of renal disease and renal cancer. Some kidney diseases may be cell type-specific, especially renal tubular cells. To investigate the classification and transcriptomic information of human kidney, we performed a method to obtain single-cell suspension of kidney rapidly, and conducted single-cell RNA sequencing (scRNA-seq). We present scRNA-seq data of 23,366 high quality cells from human kidneys of 3 donors. In this dataset, we show 10 clusters of normal human renal cells. Due to the high quality of single cell transcriptomic information, proximal tubule (PT) cells were classified into 3 subtypes and collecting ducts cells into 2 subtypes. Collectively, our data will provide a relixable reference for the studies of renal cell biology and kidney diseases.**
 
 
 ***
@@ -631,7 +631,7 @@ DimPlot(object = integrated, reduction = 'umap', label = T, group.by = "Major")
 ggsave(path = "DataAnalysis/UMAP", filename="IntegratedObject_byMajorCellType.eps", width=4, height=3)
 
 DimPlot(object = integrated, reduction = 'umap', group.by = "Minor")
-ggsave(path = "DataAnalysis/UMAP", filename="IntegratedObject_byMinorCellType.eps", width=4.5, height=3)
+ggsave(path = "DataAnalysis/UMAP", filename="IntegratedObject_byMinorCellType.eps", width=4.85, height=3)
 ```
 
 ***

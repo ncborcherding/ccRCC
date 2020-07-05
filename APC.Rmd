@@ -122,7 +122,7 @@ APC@meta.data$Run <- paste0(APC@meta.data$sample, "_", APC@meta.data$type) #Defi
 APC[["percent.mt"]] <- PercentageFeatureSet(APC, pattern = "^MT-") #Calculate %mito
 
 APC <- DietSeurat(APC, assays = "RNA")
-T.list <- SplitObject(object = APC , split.by = "Run")
+T.list <- SplitObject(object = APC , split.by = "sample")
 
 for (i in 1:length(T.list)) {
     T.list[[i]] <- SCTransform(T.list[[i]], verbose = FALSE, conserve.memory=TRUE)
@@ -179,17 +179,17 @@ rm(integrated2)
 ```
 
 Based on the review of the output above, we have selected the following parameters:
-+  UMAP 35
-+  Neighbors 40
-+  Resolution = 0.7
++  UMAP 30
++  Neighbors 35
++  Resolution = 0.5
 
 ```{r eval = FALSE}
 APC <- ScaleData(object = APC, verbose = FALSE)
 APC <- RunPCA(object = APC, npcs = 40, verbose = FALSE)
 APC <- RunUMAP(object = APC, reduction = "pca", 
-    dims = 1:35)
-APC <- FindNeighbors(object = APC, dims = 1:40, force.recalc = T)
-APC <- FindClusters(object = APC, resolution = 0.7, force.recalc=T)
+    dims = 1:30)
+APC <- FindNeighbors(object = APC, dims = 1:35, force.recalc = T)
+APC <- FindClusters(object = APC, resolution = 0.5, force.recalc=T)
 ```
 
 # Subclustering Analysis
@@ -281,6 +281,7 @@ for (i in seq_along(genelist)) {
 We can also look at the top markers for each cluster by using the *FindAllMarkers()* call.
 
 ```{r}
+APC <- NormalizeData(APC)
 All.markers <- FindAllMarkers(APC, assay = "RNA", pseudocount.use = 0.1, only.pos = T) 
 write.table(All.markers, file = "DataAnalysis/CellType/APC/markers/FindAllMarkers_output.txt", col.names=NA, sep="\t",append=F)
 ```
@@ -452,7 +453,7 @@ DefaultAssay(TumorOnly) <- "RNA"
 TumorOnly <- subset(APC, orig.ident == "P1" | orig.ident ==  "P2" | orig.ident ==  "P3")
 clusters <- as.character(unique(TumorOnly@active.ident))
 mat <- NULL
-for (i in seq_along(clusters)) {
+for (i in c(1:11,14)) {
     tmp <- subset(TumorOnly, idents = clusters[i])
     tmp <- NormalizeData(tmp, assay = "RNA") #after subset always normalize RNA
     tmp <- SetIdent(tmp, value = tmp@meta.data$type)
@@ -538,7 +539,7 @@ mat <- data.frame(markers)
 
 ```{r}
 
-file_list <- list.files("./DataAnalysis/CellType/APC/DGE/")
+file_list <- list.files("./DataAnalysis/CellType/APC/DGE/", pattern = ".txt")
 files <- file.path(paste0("./DataAnalysis/CellType/APC/DGE/", file_list))
 
 marker_list <- list()
@@ -735,7 +736,7 @@ APC <- readRDS("./data/Processed/APC_FullCluster.rds")
 
 ```{r}
 dir.create("./DataAnalysis/CellType/APC/GSEA")
-library(escape)
+#library(escape)
 GS <- getGeneSets(library = c("H", "C5"))
 ES <- enrichIt(obj = APC, gene.sets = GS, groups = 1000, cores = 4)
 save(ES, file = "./DataAnalysis/CellType/APC/GSEA/H_C5_enrichment.rda")
@@ -780,4 +781,43 @@ for (i in seq_along(top10)){
 
 ```
 
+```{r}
+sign <- read.delim("./data/immune_sign.txt")[,c(1:20, 63:69)]
+full<- as.list(sign)
+```
 
+```{r}
+
+
+unique <- names(full) 
+list <- list()
+for (i in seq_along(unique)) {
+    tmp <- full[[i]]
+    tmp <- tmp[tmp != ""]
+    tmp <- unique(toupper(tmp))
+    tmp <- GSEABase::GeneSet(tmp, setName=paste(unique[i]))
+    list[[i]] <- tmp
+    
+}
+
+list <- GSEABase::GeneSetCollection(list)
+```
+
+
+```{r}
+ES2 <- enrichIt(obj = APC, gene.sets = list, groups = 1000, cores = 4)
+save(ES2, file = "./DataAnalysis/CellType/APC/GSEA/Requested_enrichment.rda")
+```
+
+```{r}
+APC <- AddMetaData(APC, ES2)
+```
+
+```{r}
+for (i in seq_along(unique)) {
+  plot <- FeaturePlot(APC, features = unique[i]) + 
+  scale_color_gradientn(colors = rev(colorblind_vector(11)))
+  plot <- plot + NoLegend()
+  ggsave(path = "./DataAnalysis/CellType/APC/GSEA", filename=paste0(unique[i], ".eps"), plot, width=3.5, height=3)
+}
+```
