@@ -244,7 +244,7 @@ Tcells <- make_hexbin(Tcells, 40, dimension_reduction = "UMAP")
 Here is a list I use in T cell identification, we can run these first and store them in the selected folder.
 
 ```{r}
-genelist <- c("CD8a", "Cd8b1", "Cd4", "Cd3d", "Foxp3", "Il2ra", "Il7r", "Ccr7", "Ccl4", "Gata3", "Tbx21",  "Cd44", "Cd28", "Sell", "Fas", "Ctla4", "Pdcd1", "Icos", "Havcr2", "Entpd1", "Tigit", "Cd244", "Eomes", "Cd160", "Il10", "Smad3", "Klrg1", "Itga4", "Ifna1", "Ifng", "Cxcr3", "Ccr5", "Il12rb2", "Il18ra", "Il27a", "Stat1", "Stat4", "Ccr3", "Ccr4", "Ccr6", "Ccr10", "Ccr8", "Stat5", "Stat6", "Il4", "Il5", "Il6", "Il9", "Il10", "Il13", "Il17a", "Il17f", "Il21", "Il22", "Tgfbr2", "Ccl20", "Ccl22", "Rorgt", "Rora", "Rorc", "Stat3", "Tnfsf8", "Cxcr5", "Cxcr6", "Maf", "Bcl6", "Gzmb", "Prf1", "Ms4a4b", "Nfat", "Blimp1", "Batf", "Trgc1", "Trgc2", "Trdc", "Il23r", "Top2a", "Birc5", "Cxcl13", "Trac", "Trbc1", "Trbc2", "Cd52", "Nkg7", "Gapdh", "Igfbp4", "Nfkbia", "Ifi27l2a", "Tnfrsf4")
+genelist <- c("CD8a", "Cd8b1", "Cd4", "Cd3d", "Foxp3", "Il2ra", "Il7r", "Ccr7", "Ccl4", "Gata3", "Tbx21",  "Cd44", "Cd28", "Sell", "Fas", "Ctla4", "Pdcd1", "Icos", "Havcr2", "Entpd1", "Tigit", "Cd244", "Eomes", "Cd160", "Il10", "Smad3", "Klrg1", "Itga4", "Ifna1", "Ifng", "Cxcr3", "Ccr5", "Il12rb2", "Il18ra", "Il27a", "Stat1", "Stat4", "Ccr3", "Ccr4", "Ccr6", "Ccr10", "Ccr8", "Stat5", "Stat6", "Il4", "Il5", "Il6", "Il9", "Il10", "Il13", "Il17a", "Il17f", "Il21", "Il22", "Tgfbr2", "Ccl20", "Ccl22", "Rorgt", "Rora", "Rorc", "Stat3", "Tnfsf8", "Cxcr5", "Cxcr6", "Maf", "Bcl6", "Gzmb", "Prf1", "Ms4a4b", "Nfat", "Blimp1", "Batf", "Trgc1", "Trgc2", "Trdc", "Il23r", "Top2a", "Birc5", "Cxcl13", "Trac", "Trbc1", "Trbc2", "Cd52", "Nkg7", "Gapdh", "Igfbp4", "Nfkbia", "Ifi27l2a", "Tnfrsf4", "TCF7")
 genelist <- toupper(unique(genelist))
 
 
@@ -572,6 +572,7 @@ PT <- as.data.frame(slingPseudotime(sds))
 colnames(PT) <- c("PseudoT1", "PseudoT2" , "PseudoT3")
 Tcells <- AddMetaData(Tcells, PT)
 saveRDS(Tcells, file = "./data/Processed/CD4.Tcells_FullCluster.rds")
+Tcells <- readRDS("./data/Processed/CD4.Tcells_FullCluster_test.rds")
 ```
 
 ***
