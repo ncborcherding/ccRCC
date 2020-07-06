@@ -642,3 +642,20 @@ saveRDS(integrated, file = "./data/Processed/integrated_Cluster.rds")
 fullMeta <- integrated[[]]
 save(fullMeta, file = "./data/Processed/completeMeta.rda")
 ```
+
+***
+
+# Summary Statistics for data
+
+```{r}
+integrated@meta.data$Run <- paste0(integrated@meta.data$sample, "_", integrated@meta.data$type)
+table(integrated$Run)
+```
+
+```{r}
+meta <- integrated[[]]
+meta %>%
+  group_by(Run) %>%
+  summarise(meanF = mean(nFeature_RNA)) 
+```
+
