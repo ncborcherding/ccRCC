@@ -421,6 +421,69 @@ mat <- data.frame(markers)
                 sep="\t",append=F, row.names = FALSE)
 ```
 
+## Visualizing the differential gene expression
+
+```{r}
+
+file_list <- list.files("./DataAnalysis/CellType/CD4.Tcells/DGE/", pattern = ".txt")
+files <- file.path(paste0("./DataAnalysis/CellType/CD4.Tcells/DGE/", file_list))
+
+marker_list <- list()
+for (i in 1:length(files)) {
+    marker_list[[i]] <- read.delim(files[i])
+}
+
+prefix <- suffix <- stringr::str_split(file_list, "_", simplify = T)[,1]
+suffix <- stringr::str_split(file_list, "_", simplify = T)[,3] #Isolate just the cell type
+suffix <- stringr::str_remove(suffix, ".txt") #remove .txt
+suffix <- stringr::str_remove(suffix, " ") #remoce spaces
+names <- paste0(prefix, "_", suffix)
+names(marker_list) <- names #assign the cell type to each element of the list
+```
+
+Going to make 2 different plots, the first will take the percent difference from Myocarditis versus healthy cells and place that delta on the x-axis with fold-change on the y-axis. The other graph will be the typical volcano plot. Gene labeling is based first on siginificance and then on the weight of fold-change + 4xDelta Percent. The latter is such that we want to find genes that are not only upregulated by good markers for myocarditis. 
+
+```{r}
+library(ggrepel)
+dir.create("DataAnalysis/CellType/CD4.Tcells/DGE/visualizations")
+
+for (i in seq_along(marker_list)) {
+tmp <- marker_list[[i]]
+tmp <- tmp %>%
+    mutate(Trend = ifelse(p_val_adj <= 0.05 & avg_logFC > 0, "Up",
+                    ifelse(p_val_adj <= 0.05 & avg_logFC < 0, "Down", "None")))
+filter <- subset(tmp, p_val_adj <= 0.05 & avg_logFC > 0)
+top20 <- filter %>% top_n(n =20, wt = avg_logFC + 4*Difference)
+
+ggplot(tmp, aes(x=Difference, y=avg_logFC)) + 
+    geom_point(data=subset(tmp, Trend == "Up" | Trend == "Down"), aes(color = Trend), size=0.75) + 
+    geom_point(data=subset(tmp, Trend != "Up" & Trend != "Down"), size=0.5, color="#999999") + 
+  theme_classic() + 
+    geom_hline(yintercept = 0, lty = 2) + 
+    geom_vline(xintercept = 0, lty = 2)  + 
+    geom_text_repel(data=subset(tmp, names %in% top20$names), aes(label=names), segment.size = 0.25, size=2.5) + 
+    scale_color_manual(values = rev(colorblind_vector(2)))+
+    guides(color=F)
+ggsave(path = "DataAnalysis/CellType/CD4.Tcells/DGE/visualizations", file = paste0("pctDifference_vs_foldchange_", names(marker_list[i]), ".pdf"), height = 3.5, width=2.5) 
+
+tmp <- tmp %>%
+    mutate(p_val_adj = ifelse(p_val_adj == 0, min(p_val_adj), p_val_adj)) #mutate the p-values that are lower than detection
+
+ggplot(tmp, aes(x=avg_logFC, y=-log10(p_val_adj))) + 
+    geom_point(size=0.5, color="#999999") + 
+    geom_point(data=subset(tmp, Trend == "Up" | Trend == "Down"), aes(color = Trend), size=0.75) + 
+    theme_classic() + 
+    scale_y_sqrt() +
+    geom_vline(xintercept = 0, lty = 2) + 
+    geom_hline(yintercept = 1.3, lty = 2) + 
+    geom_text_repel(data=subset(tmp, names %in% top20$names), aes(label=names), segment.size = 0.25, size=2.5) + 
+    scale_color_manual(values = rev(colorblind_vector(2))) + 
+    guides(color = F)
+ggsave(path = "DataAnalysis/CellType/CD4.Tcells/DGE/visualizations", file = paste0("VolcanoPlot_", names(marker_list[i]), ".pdf"), height = 3.5, width=2.5)
+}
+```
+
+
 ***
 
 # Trajectory
