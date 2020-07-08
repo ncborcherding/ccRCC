@@ -141,9 +141,7 @@ plot <- DimPlot(Tcells, reduction = "umap")
 sc4.cells <- CellSelector(plot=plot)
 Tcells <- subset(Tcells, cells = sc4.cells, invert = TRUE)
 
-sc11.cells <- which(Idents(Tcells) == 11)
-sc11.cells <- names(Idents(Tcells))[sc11.cells]
-Idents(Tcells, cells = sc11.cells) <- 9
+Tcells <- subset(Tcells, idents = 11, invert = T) #Cluster 11 appears to be B cells contamination from healthy peripheral blood
 ```
 
 ```{r}
@@ -151,7 +149,7 @@ Tcells@meta.data$newCluster <- Tcells@active.ident
 DimPlot(object = Tcells, reduction = 'umap', label = T, ) + NoLegend()
 ggsave(path = "./DataAnalysis/CellType/CD8.Tcells", filename="IntegratedObject_byCluster.eps", width=3.5, height=3)
 DimPlot(object = Tcells, reduction = 'umap', group.by = "type") 
-ggsave(path = "./DataAnalysis/CellType/CD8.Tcells", filename="IntegratedObject_byType.eps", width=3.75, height=3)
+ggsave(path = "./DataAnalysis/CellType/CD8.Tcells", filename="IntegratedObject_byType.eps", width=4, height=3)
 
 DimPlot(object = Tcells, reduction = 'umap', group.by = "Final_clusters") 
 ggsave(path = "./DataAnalysis/CellType/CD8.Tcells", filename="IntegratedObject_byGlobalCluster.eps", width=3.75, height=3)
@@ -230,14 +228,14 @@ ggplot(freq_table, aes(x=newCluster, y=n, fill=Phase)) +
     facet_grid(type ~.) + 
    scale_fill_manual(values=colorblind_vector(3)) + 
   theme_classic()
-ggsave(path = "./DataAnalysis/CellType/CD4.Tcells/CellCycle", file = "CellCycle_byCluster_byType.pdf", height=6, width=6)
+ggsave(path = "./DataAnalysis/CellType/CD8.Tcells/CellCycle", file = "CellCycle_byCluster_byType.pdf", height=6, width=6)
 
 ggplot(freq_table, aes(x=newCluster, y=n, fill=Phase)) + 
   stat_summary(geom="bar", position="fill", color="black", lwd=0.25) + 
   theme(axis.title.x = element_blank())+ 
    scale_fill_manual(values=colorblind_vector(3)) + 
   theme_classic()
-ggsave(path = "./DataAnalysis/CellType/CD4.Tcells/CellCycle", file = "CellCycle_byCluster.pdf", height=2, width=6)
+ggsave(path = "./DataAnalysis/CellType/CD8.Tcells/CellCycle", file = "CellCycle_byCluster.pdf", height=2, width=6)
 ```
 
 
@@ -247,7 +245,7 @@ DimPlot(object = Tcells, reduction = 'umap', group.by = "Phase", split.by = "typ
     scale_color_manual(values=colorblind_vector(3)) 
 
 
-ggsave(path = "./DataAnalysis/CellType/CD4.Tcells/CellCycle", filename="CellCycle_UMAP_byType.eps", width=10.5, height=3)
+ggsave(path = "./DataAnalysis/CellType/CD8.Tcells/CellCycle", filename="CellCycle_UMAP_byType.eps", width=10.5, height=3)
 ```
 ###Expression Markers in T cells
 
@@ -261,7 +259,7 @@ Tcells <- make_hexbin(Tcells, 40, dimension_reduction = "UMAP")
 Here is a list I use in T cell identification, we can run these first and store them in the selected folder.
 
 ```{r}
-genelist <- c("Cd8a", "Cd8b1", "Cd4", "Cd3d", "Foxp3", "Il2ra", "Il7r", "Ccr7", "Ccl4", "Gata3", "Tbx21",  "Cd44", "Cd28", "Sell", "Fas", "Ctla4", "Pdcd1", "Icos", "Havcr2", "Entpd1", "Tigit", "Cd244", "Eomes", "Cd160", "Il10", "Smad3", "Klrg1", "Itga4", "Ifna1", "Ifng", "Cxcr3", "Ccr5", "Il12rb2", "Il18ra", "Il27a", "Stat1", "Stat4", "Ccr3", "Ccr4", "Ccr6", "Ccr10", "Ccr8", "Stat5", "Stat6", "Il4", "Il5", "Il6", "Il9", "Il10", "Il13", "Il17a", "Il17f", "Il21", "Il22", "Tgfbr2", "Ccl20", "Ccl22", "Rorgt", "Rora", "Rorc", "Stat3", "Tnfsf8", "Cxcr5", "Cxcr6", "Maf", "Bcl6", "Gzmb", "Prf1", "Ms4a4b", "Nfat", "Blimp1", "Batf", "Trgc1", "Trgc2", "Trdc", "Il23r", "Top2a", "Birc5", "Cxcl13", "Trac", "Trbc1", "Trbc2", "Cd52", "Nkg7", "Gapdh", "Igfbp4", "Nfkbia", "Ifi27l2a", "Tnfrsf4")
+genelist <- c("Cd8a", "Cd8b1", "Cd4", "Cd3d", "Foxp3", "Il2ra", "Il7r", "Ccr7", "Ccl4", "Gata3", "Tbx21",  "Cd44", "Cd28", "Sell", "Fas", "Ctla4", "Pdcd1", "Icos", "Havcr2", "Entpd1", "Tigit", "Cd244", "Eomes", "Cd160", "Il10", "Smad3", "Klrg1", "Itga4", "Ifna1", "Ifng", "Cxcr3", "Ccr5", "Il12rb2", "Il18ra", "Il27a", "Stat1", "Stat4", "Ccr3", "Ccr4", "Ccr6", "Ccr10", "Ccr8", "Stat5", "Stat6", "Il4", "Il5", "Il6", "Il9", "Il10", "Il13", "Il17a", "Il17f", "Il21", "Il22", "Tgfbr2", "Ccl20", "Ccl22", "Rorgt", "Rora", "Rorc", "Stat3", "Tnfsf8", "Cxcr5", "Cxcr6", "Maf", "Bcl6", "Gzmb", "Prf1", "Ms4a4b", "Nfat", "Blimp1", "Batf", "Trgc1", "Trgc2", "Trdc", "Il23r", "Top2a", "Birc5", "Cxcl13", "Trac", "Trbc1", "Trbc2", "Cd52", "Nkg7", "Gapdh", "Igfbp4", "Nfkbia", "Ifi27l2a", "Tnfrsf4", "TCF7")
 genelist <- toupper(unique(genelist))
 
 
@@ -307,12 +305,12 @@ for (i in seq_along(top10)) {
 
 
 ```{r}
-top10 <- All.markers %>% group_by(cluster) %>% top_n(n = 10, wt = avg_logFC)
-DotPlot(Tcells, features = unique(top10$gene)) + coord_flip() + 
+top5 <- All.markers %>% group_by(cluster) %>% top_n(n = 5, wt = avg_logFC)
+DotPlot(Tcells, features = unique(top5$gene)) + coord_flip() + 
     scale_color_gradientn(colors = rev(colorblind_vector(11))) + 
     guides(color = F, size = F) +
     scale_size(range = c(0.5,3.5))
-ggsave(path = "DataAnalysis/CellType/CD8.Tcells/markers", file = "Top10_dotplot.eps", height=10, width=3)
+ggsave(path = "DataAnalysis/CellType/CD8.Tcells/markers", file = "Top5_dotplot.eps", height=6, width=3.5)
 ```
 
 
@@ -730,10 +728,10 @@ clonalProportion(CD8, cloneCall = "gene+nt")
 ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Clonal_proportion.pdf", height=2, width=5)
 
 clonalOverlap(CD8, cloneCall = "gene+nt", method = "morisita")
-ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Clonal_overlap_morisita.pdf", height=3, width=4)
+ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Clonal_overlap_morisita.pdf", height=4, width=5)
 
 clonalOverlap(CD8, cloneCall = "gene+nt", method = "overlap")
-ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Clonal_overlap_overlap.pdf", height=3, width=4)
+ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Clonal_overlap_overlap.pdf", height=4, width=5)
 
 clonalHomeostasis(TumorOnly, cloneCall = "gene+nt")
 ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Clonal_homeostasis_TumorOnly.pdf", height=2, width=5)
@@ -742,10 +740,10 @@ clonalProportion(TumorOnly, cloneCall = "gene+nt")
 ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Clonal_proportion_TumorOnly.pdf", height=2, width=5)
 
 clonalOverlap(TumorOnly, cloneCall = "gene+nt", method = "morisita")
-ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Clonal_overlap_morisita_TumorOnly.pdf", height=3, width=4)
+ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Clonal_overlap_morisita_TumorOnly.pdf", height=4, width=5)
 
 clonalOverlap(TumorOnly, cloneCall = "gene+nt", method = "overlap")
-ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Clonal_overlap_overlap_TumorOnly.pdf", height=3, width=4)
+ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Clonal_overlap_overlap_TumorOnly.pdf", height=4, width=5)
 ```
 
 ```{r}

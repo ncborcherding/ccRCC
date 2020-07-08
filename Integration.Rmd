@@ -659,3 +659,30 @@ meta %>%
   summarise(meanF = mean(nFeature_RNA)) 
 ```
 
+```{r}
+table <- meta %>%
+    group_by(orig.ident, type, Minor) %>%
+    summarise(n = n()) %>%
+    mutate(freq = n / sum(n)) 
+
+table$type <- factor(table$type, levels = c("P", "K", "T"))
+ggplot(table, aes(x=Minor, y=freq, fill = type)) +
+    geom_boxplot() + 
+    facet_grid(.~Minor, scales = "free_x") + 
+    theme_classic() + 
+    scale_fill_manual(values = colorblind_vector(3))
+ggsave("DataAnalysis/UMAP/CellType_proportion_byType.pdf", height=2, width=6)
+
+```
+
+```{r}
+unique <- unique(meta$Minor)
+
+for (i in seq_along(unique)) {
+    tmp <- subset(table, Minor == unique[i])
+    aov <- aov(tmp$freq~ tmp$type)
+    print(summary(aov))
+    
+}
+```
+
