@@ -529,7 +529,7 @@ nc <- 2
 pt <- slingPseudotime(sds)
 nms <- colnames(pt)
 nr <- ceiling(length(nms)/nc)
-pal <- rev(colorblind_vector(100))
+pal <- colorblind_vector(100)
 par(mfrow = c(nr, nc))
 pdf("./DataAnalysis/CellType/CD4.Tcells/slingshot/Trajectory2_pseudotime.pdf", height=4, width=4)
 for (i in nms) {
@@ -635,7 +635,7 @@ PT <- as.data.frame(slingPseudotime(sds))
 colnames(PT) <- c("PseudoT1", "PseudoT2" , "PseudoT3")
 Tcells <- AddMetaData(Tcells, PT)
 saveRDS(Tcells, file = "./data/Processed/CD4.Tcells_FullCluster.rds")
-Tcells <- readRDS("./data/Processed/CD4.Tcells_FullCluster_test.rds")
+Tcells <- readRDS("./data/Processed/CD4.Tcells_FullCluster.rds")
 ```
 
 ***
@@ -740,7 +740,7 @@ save(ES, file = "./DataAnalysis/CellType/CD4.Tcells/GSEA/HC5_enrichment.rda")
 
 
 ```{r}
-load("./DataAnalysis/CellType/CD4.Tcells/GSEA/H_enrichment.rda")
+load("./DataAnalysis/CellType/CD4.Tcells/GSEA/HC5_enrichment.rda")
 meta <- Tcells[[]]
 meta <- merge(meta, ES, by = "row.names")
 names <- colnames(ES)
@@ -781,3 +781,58 @@ for (i in seq_along(top10)){
 ```
 
 
+```{r}
+sign <- read.delim("./data/immune_sign.txt")[,1:20]
+full <- as.list(sign)
+
+unique <- names(full) 
+list <- list()
+for (i in seq_along(unique)) {
+    tmp <- full[[i]]
+    tmp <- tmp[tmp != ""]
+    tmp <- unique(toupper(tmp))
+    tmp <- GSEABase::GeneSet(tmp, setName=paste(unique[i]))
+    list[[i]] <- tmp
+    
+}
+
+list <- GSEABase::GeneSetCollection(list)
+```
+
+```{r}
+ES2 <- enrichIt(obj = Tcells, gene.sets = list, groups = 1000, cores = 2)
+save(ES2, file = "./DataAnalysis/CellType/CD8.Tcells/GSEA/Requested_enrichment.rda")
+
+
+```
+
+```{r}
+ES2 <- get(load("./DataAnalysis/CellType/CD4.Tcells/GSEA/Requested_enrichment.rda"))
+filter <- ES[,grepl("HALLMARK",colnames(ES))]
+filter <- cbind(filter,ES2)
+meta <- Tcells[[]]
+meta <- merge(meta, filter, by = "row.names")
+```
+
+```{r}
+heatmap <- meta[, c("newCluster", colnames(filter))]
+melted <- reshape2::melt(heatmap, id.vars = c("newCluster"))
+meanvalues <- melted %>%
+  group_by(newCluster, variable) %>%
+  summarise(median(value))
+
+matrix <- reshape2::dcast(meanvalues, newCluster ~ variable)
+rownames(matrix) <- matrix[,1]
+matrix <- matrix[,-1]
+
+pdf("test.pdf", height=12, width=5)
+pheatmap::pheatmap(t(matrix), color = rev(colorblind_vector(50)), scale = "row", fontsize_row = 3, cluster_rows = T, cluster_cols = T)
+dev.off()
+
+GOI <- c("HALLMARK_INFLAMMATORY_RESPONSE", "T1_Interferon", "T2_Interferon", "Activated", "Exhuasted", "T_Cell_Terminal_Differentiation", "HALLMARK_HYPOXIA", "HALLMARK_IL2_STAT5_SIGNALING","HALLMARK_IL6_JAK_STAT3_SIGNALING","HALLMARK_NOTCH_SIGNALING", "HALLMARK_TGF_BETA_SIGNALING","HALLMARK_HEDGEHOG_SIGNALING","HALLMARK_DNA_REPAIR", "Cytolytic", "Glycolysis", "TCA_cycle", "Treg")
+sub <- matrix[,colnames(matrix) %in% GOI]
+
+pdf("./DataAnalysis/CellType/CD4.Tcells/GSEA/SelectGSEAheatmap.pdf", height=4, width=4)
+pheatmap::pheatmap(t(sub), color = rev(colorblind_vector(50)), scale = "row", fontsize_row = 3, cluster_rows = T, cluster_cols = F)
+dev.off()
+```
