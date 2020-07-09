@@ -200,7 +200,12 @@ APC@meta.data$newCluster <- APC@active.ident
 DimPlot(object = APC, reduction = 'umap', label = T, ) + NoLegend()
 ggsave(path = "./DataAnalysis/CellType/APC", filename="IntegratedObject_byCluster.eps", width=3.5, height=3)
 DimPlot(object = APC, reduction = 'umap', group.by = "type") 
-ggsave(path = "./DataAnalysis/CellType/APC", filename="IntegratedObject_byType.eps", width=3.75, height=3)
+ggsave(path = "./DataAnalysis/CellType/APC", filename="IntegratedObject_byType.eps", width=4, height=3)
+
+a <- DimPlot(object = APC, reduction = 'umap', split.by = "type", group.by = "type")  + NoLegend() + NoAxes() + facet_wrap(~type)
+a2 <- a + stat_density_2d(a$data, mapping = aes(x = a$data[,"UMAP_1"], y = a$data[,"UMAP_2"]), color = "black") 
+a2
+ggsave(path = "./DataAnalysis/CellType/APC", filename="IntegratedObject_byType_faceted.eps", width=10.5, height=3)
 ```
 
 ## Calculating the relative proportion of types in each cluster
@@ -256,7 +261,7 @@ Here is a list I use in T cell identification, we can run these first and store 
 
 ```{r}
 genelist <- read.delim("./data/immune_sign.txt")
-genelist <- c(genelist$M1.Macro, genelist$M2.Macro, genelist$DC1, genelist$DC2, genelist$DC3, genelist$DC4, genelist$DC5, genelist$DC6, genelist$Langerhan, "ITGAX", "LY75", "CD8A", "CD4", "ITGAM", "FCGR1A")
+genelist <- c(genelist$M1.Macro, genelist$M2.Macro, genelist$DC1, genelist$DC2, genelist$DC3, genelist$DC4, genelist$DC5, genelist$DC6, genelist$Langerhan, "ITGAX", "LY75", "CD8A", "CD4", "ITGAM", "FCGR1A", "BST2", "TLR9", "SIGLEC1")
 genelist <- toupper(unique(genelist))
 
 
