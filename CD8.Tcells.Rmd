@@ -557,13 +557,14 @@ dev.off()
 
 ## Using pseudotime to rank genes
 
+Branch 3
 ```{r}
 library(rsample)
 library(tidymodels)
 
 Tcells <- FindVariableFeatures(Tcells)
 
-# Get top 498 highly variable genes
+# Get top 300 highly variable genes
 top_hvg <- HVFInfo(Tcells) %>% 
   mutate(., bc = rownames(.)) %>% 
   arrange(desc(variance)) %>% 
@@ -584,6 +585,8 @@ dat_val <- testing(dat_split)
 colnames(dat_train) <- stringr::str_replace(colnames(dat_train), "-", ".") #Replace dash with dots in gene names
 colnames(dat_val) <- stringr::str_replace(colnames(dat_val), "-", ".")
 
+dat_train <- na.omit(dat_train)
+
 #Performing random forest
 model <- rand_forest(mtry = 200, trees = 1400, min_n = 15, mode = "regression") %>%
   set_engine("ranger", importance = "impurity", num.threads = 3) %>%
@@ -596,11 +599,9 @@ top_genes <- gsub("\\.", "-", top_genes)
 
 output <- data.frame(model$fit$variable.importance)
 colnames(output) <- "Var.Imp"
-write.table(output, file = "DataAnalysis/CellType/CD8.Tcells/slingshot/VarImp_model.txt", col.names=NA, sep="\t",append=F)
-```
+write.table(output, file = "DataAnalysis/CellType/CD8.Tcells/slingshot/VarImp_model_B3.txt", col.names=NA, sep="\t",append=F)
 
-```{r}
-output <- read.delim("./DataAnalysis/CellType/CD8.Tcells/slingshot/VarImp_model.txt")
+output <- read.delim("./DataAnalysis/CellType/CD8.Tcells/slingshot/VarImp_model_B3.txt")
 subset_out <- output %>% top_n(20, wt = Var.Imp)
 
 ggplot(subset_out, aes(x=reorder(X, Var.Imp), y=Var.Imp)) +
@@ -608,7 +609,7 @@ ggplot(subset_out, aes(x=reorder(X, Var.Imp), y=Var.Imp)) +
     theme_classic() + 
     coord_flip() + 
     theme(axis.title.y = element_blank())
-ggsave("./DataAnalysis/CellType/CD8.Tcells/slingshot/top20_varImp_raw.pdf")
+ggsave("./DataAnalysis/CellType/CD8.Tcells/slingshot/top20_varImp_raw_B3.pdf")
 
 subset_out$Var.Imp <- subset_out$Var.Imp/max(output$Var.Imp)
 
@@ -617,14 +618,12 @@ ggplot(subset_out, aes(x=reorder(X, Var.Imp), y=Var.Imp)) +
     theme_classic() + 
     coord_flip() + 
     theme(axis.title.y = element_blank())
-ggsave("./DataAnalysis/CellType/CD8.Tcells/slingshot/top20_varImp_scaled.pdf")
-```
-
+ggsave("./DataAnalysis/CellType/CD8.Tcells/slingshot/top20_varImp_scaled_B3.pdf")
 
 ### Importance for T-cell-related genes 
-```{r}
+
 output <- read.delim("./DataAnalysis/CellType/CD8.Tcells/slingshot/VarImp_model.txt")
-genelist <- c("Cd8a", "Cd8b1", "Cd4", "Cd3d", "Foxp3", "Il2ra", "Il7r", "Ccr7", "Ccl4", "Gata3", "Tbx21",  "Cd44", "Cd28", "Sell", "Fas", "Ctla4", "Pdcd1", "Icos", "Havcr2", "Entpd1", "Tigit", "Cd244", "Eomes", "Cd160", "Il10", "Smad3", "Klrg1", "Itga4", "Ifna1", "Ifng", "Cxcr3", "Ccr5", "Il12rb2", "Il18ra", "Il27a", "Stat1", "Stat4", "Ccr3", "Ccr4", "Ccr6", "Ccr10", "Ccr8", "Stat5", "Stat6", "Il4", "Il5", "Il6", "Il9", "Il10", "Il13", "Il17a", "Il17f", "Il21", "Il22", "Tgfbr2", "Ccl20", "Ccl22", "Rorgt", "Rora", "Rorc", "Stat3", "Tnfsf8", "Tnfrsf4", "Tnfrsf8","Ccl5", "Cxcr5", "Cxcr6", "Maf", "Bcl6", "Gzmb", "Prf1", "Ms4a4b", "Nfat", "Blimp1", "Batf","Il23r", "Top2a", "Birc5", "Cxcl13", "Nkg7", "Gapdh", "Nfkbia", "Igfbp4", "Cxcl2", "Cxcl14", "Ifngr1", "Cd28", "Cd3e", "Cd3g", "Cd52", "Lag3", "Junb", "Fox", "Ifi27l2a", "Ifitm3", "Gzma")
+genelist <- c("Cd8a", "Cd8b1", "Cd4", "Cd3d", "Foxp3", "Il2ra", "Il7r", "Ccr7", "Ccl4", "Gata3", "Tbx21",  "Cd44", "Cd28", "Sell", "Fas", "Ctla4", "Pdcd1", "Icos", "Havcr2", "Entpd1", "Tigit", "Cd244", "Eomes", "Cd160", "Il10", "Smad3", "Klrg1", "Itga4", "Ifna1", "Ifng", "Cxcr3", "Ccr5", "Il12rb2", "Il18ra", "Il27a", "Stat1", "Stat4", "Ccr3", "Ccr4", "Ccr6", "Ccr10", "Ccr8", "Stat5", "Stat6", "Il4", "Il5", "Il6", "Il9", "Il10", "Il13", "Il17a", "Il17f", "Il21", "Il22", "Tgfbr2", "Ccl20", "Ccl22", "Rorgt", "Rora", "Rorc", "Stat3", "Tnfsf8", "Tnfrsf4", "Tnfrsf8","Ccl5", "Cxcr5", "Cxcr6", "Maf", "Bcl6", "Gzmb", "Prf1", "Ms4a4b", "Nfat", "Blimp1", "Batf","Il23r", "Top2a", "Birc5", "Cxcl13", "Nkg7", "Gapdh", "Nfkbia", "Igfbp4", "Cxcl2", "Cxcl14", "Ifngr1", "Cd28", "Cd3e", "Cd3g", "Cd52", "Lag3", "Junb", "Fox", "Ifi27l2a", "Ifitm3", "Gzma", "TCF7", "LEF1")
 genelist <- tolower(unique(genelist))
 
 subset_out <- subset(output, X %in% genelist)
@@ -634,7 +633,7 @@ ggplot(subset_out, aes(x=reorder(X, Var.Imp), y=Var.Imp)) +
     theme_classic() + 
     coord_flip() + 
     theme(axis.title.y = element_blank())
-ggsave("./DataAnalysis/CellType/CD8.Tcells/slingshot/Filtered_varImp_raw.pdf")
+ggsave("./DataAnalysis/CellType/CD8.Tcells/slingshot/Filtered_varImp_raw_B3.pdf")
 
 subset_out$Var.Imp <- subset_out$Var.Imp/max(output$Var.Imp)
 
@@ -643,18 +642,495 @@ ggplot(subset_out, aes(x=reorder(X, Var.Imp), y=Var.Imp)) +
     theme_classic() + 
     coord_flip() + 
     theme(axis.title.y = element_blank())
-ggsave("./DataAnalysis/CellType/CD8.Tcells/slingshot/Filtered_varImp_scaled.pdf")
+ggsave("./DataAnalysis/CellType/CD8.Tcells/slingshot/Filtered_varImp_scaled_B3.pdf")
+
+
+##Branch 4
+
+top_hvg <- HVFInfo(Tcells) %>% 
+  mutate(., bc = rownames(.)) %>% 
+  arrange(desc(variance)) %>% 
+  top_n(300, variance) %>% 
+  pull(bc)
+# Prepare data for random forest
+dat_use <- t(as.matrix(GetAssayData(Tcells, slot = "data"))[top_hvg,])
+dat_use_df <- cbind(slingPseudotime(sds)[,2], dat_use) # Do curve 2, so 2nd columnn
+colnames(dat_use_df)[1] <- "pseudotime"
+dat_use_df <- as.data.frame(dat_use_df[!is.na(dat_use_df[,2]),])
+dat_use_df <- janitor::clean_names(dat_use_df)
+
+
+dat_split <- initial_split(dat_use_df)
+dat_train <- training(dat_split)
+dat_val <- testing(dat_split)
+
+colnames(dat_train) <- stringr::str_replace(colnames(dat_train), "-", ".") #Replace dash with dots in gene names
+colnames(dat_val) <- stringr::str_replace(colnames(dat_val), "-", ".")
+
+dat_train <- na.omit(dat_train)
+#Performing random forest
+model <- rand_forest(mtry = 200, trees = 1400, min_n = 15, mode = "regression") %>%
+  set_engine("ranger", importance = "impurity", num.threads = 3) %>%
+  fit(pseudotime ~ ., data = dat_train) 
+
+#Getting top 200 genes by pseudotime
+var_imp <- sort(model$fit$variable.importance, decreasing = TRUE)
+top_genes <- names(var_imp)[1:200]
+top_genes <- gsub("\\.", "-", top_genes)
+
+output <- data.frame(model$fit$variable.importance)
+colnames(output) <- "Var.Imp"
+write.table(output, file = "DataAnalysis/CellType/CD8.Tcells/slingshot/VarImp_model_B4.txt", col.names=NA, sep="\t",append=F)
+
+output <- read.delim("./DataAnalysis/CellType/CD8.Tcells/slingshot/VarImp_model_B4.txt")
+subset_out <- output %>% top_n(20, wt = Var.Imp)
+
+ggplot(subset_out, aes(x=reorder(X, Var.Imp), y=Var.Imp)) +
+    geom_bar(stat = "identity") + 
+    theme_classic() + 
+    coord_flip() + 
+    theme(axis.title.y = element_blank())
+ggsave("./DataAnalysis/CellType/CD8.Tcells/slingshot/top20_varImp_raw_B4.pdf")
+
+subset_out$Var.Imp <- subset_out$Var.Imp/max(output$Var.Imp)
+
+ggplot(subset_out, aes(x=reorder(X, Var.Imp), y=Var.Imp)) +
+    geom_bar(stat = "identity") + 
+    theme_classic() + 
+    coord_flip() + 
+    theme(axis.title.y = element_blank())
+ggsave("./DataAnalysis/CellType/CD8.Tcells/slingshot/top20_varImp_scaled_B4.pdf")
+
+### Importance for T-cell-related genes 
+
+output <- read.delim("./DataAnalysis/CellType/CD8.Tcells/slingshot/VarImp_model_B4.txt")
+
+
+subset_out <- subset(output, X %in% genelist)
+
+ggplot(subset_out, aes(x=reorder(X, Var.Imp), y=Var.Imp)) +
+    geom_bar(stat = "identity") + 
+    theme_classic() + 
+    coord_flip() + 
+    theme(axis.title.y = element_blank())
+ggsave("./DataAnalysis/CellType/CD8.Tcells/slingshot/Filtered_varImp_raw_B4.pdf")
+
+subset_out$Var.Imp <- subset_out$Var.Imp/max(output$Var.Imp)
+
+ggplot(subset_out, aes(x=reorder(X, Var.Imp), y=Var.Imp)) +
+    geom_bar(stat = "identity") + 
+    theme_classic() + 
+    coord_flip() + 
+    theme(axis.title.y = element_blank())
+ggsave("./DataAnalysis/CellType/CD8.Tcells/slingshot/Filtered_varImp_scaled_B4.pdf")
+
+##Branch 5
+
+top_hvg <- HVFInfo(Tcells) %>% 
+  mutate(., bc = rownames(.)) %>% 
+  arrange(desc(variance)) %>% 
+  top_n(300, variance) %>% 
+  pull(bc)
+# Prepare data for random forest
+dat_use <- t(as.matrix(GetAssayData(Tcells, slot = "data"))[top_hvg,])
+dat_use_df <- cbind(slingPseudotime(sds)[,5], dat_use) # Do curve 2, so 2nd columnn
+colnames(dat_use_df)[1] <- "pseudotime"
+dat_use_df <- as.data.frame(dat_use_df[!is.na(dat_use_df[,2]),])
+dat_use_df <- janitor::clean_names(dat_use_df)
+
+
+dat_split <- initial_split(dat_use_df)
+dat_train <- training(dat_split)
+dat_val <- testing(dat_split)
+
+colnames(dat_train) <- stringr::str_replace(colnames(dat_train), "-", ".") #Replace dash with dots in gene names
+colnames(dat_val) <- stringr::str_replace(colnames(dat_val), "-", ".")
+
+dat_train <- na.omit(dat_train)
+#Performing random forest
+model <- rand_forest(mtry = 200, trees = 1400, min_n = 15, mode = "regression") %>%
+  set_engine("ranger", importance = "impurity", num.threads = 3) %>%
+  fit(pseudotime ~ ., data = dat_train) 
+
+#Getting top 200 genes by pseudotime
+var_imp <- sort(model$fit$variable.importance, decreasing = TRUE)
+top_genes <- names(var_imp)[1:200]
+top_genes <- gsub("\\.", "-", top_genes)
+
+output <- data.frame(model$fit$variable.importance)
+colnames(output) <- "Var.Imp"
+write.table(output, file = "DataAnalysis/CellType/CD8.Tcells/slingshot/VarImp_model_B5.txt", col.names=NA, sep="\t",append=F)
+
+output <- read.delim("./DataAnalysis/CellType/CD8.Tcells/slingshot/VarImp_model_B5.txt")
+subset_out <- output %>% top_n(20, wt = Var.Imp)
+
+ggplot(subset_out, aes(x=reorder(X, Var.Imp), y=Var.Imp)) +
+    geom_bar(stat = "identity") + 
+    theme_classic() + 
+    coord_flip() + 
+    theme(axis.title.y = element_blank())
+ggsave("./DataAnalysis/CellType/CD8.Tcells/slingshot/top20_varImp_raw_B5.pdf")
+
+subset_out$Var.Imp <- subset_out$Var.Imp/max(output$Var.Imp)
+
+ggplot(subset_out, aes(x=reorder(X, Var.Imp), y=Var.Imp)) +
+    geom_bar(stat = "identity") + 
+    theme_classic() + 
+    coord_flip() + 
+    theme(axis.title.y = element_blank())
+ggsave("./DataAnalysis/CellType/CD8.Tcells/slingshot/top20_varImp_scaled_B5.pdf")
+
+### Importance for T-cell-related genes 
+
+output <- read.delim("./DataAnalysis/CellType/CD8.Tcells/slingshot/VarImp_model_B5.txt")
+
+subset_out <- subset(output, X %in% genelist)
+
+ggplot(subset_out, aes(x=reorder(X, Var.Imp), y=Var.Imp)) +
+    geom_bar(stat = "identity") + 
+    theme_classic() + 
+    coord_flip() + 
+    theme(axis.title.y = element_blank())
+ggsave("./DataAnalysis/CellType/CD8.Tcells/slingshot/Filtered_varImp_raw_B5.pdf")
+
+subset_out$Var.Imp <- subset_out$Var.Imp/max(output$Var.Imp)
+
+ggplot(subset_out, aes(x=reorder(X, Var.Imp), y=Var.Imp)) +
+    geom_bar(stat = "identity") + 
+    theme_classic() + 
+    coord_flip() + 
+    theme(axis.title.y = element_blank())
+ggsave("./DataAnalysis/CellType/CD8.Tcells/slingshot/Filtered_varImp_scaled_B5.pdf")
+
+##Branch 2
+
+top_hvg <- HVFInfo(Tcells) %>% 
+  mutate(., bc = rownames(.)) %>% 
+  arrange(desc(variance)) %>% 
+  top_n(300, variance) %>% 
+  pull(bc)
+# Prepare data for random forest
+dat_use <- t(as.matrix(GetAssayData(Tcells, slot = "data"))[top_hvg,])
+dat_use_df <- cbind(slingPseudotime(sds)[,3], dat_use) # Do curve 2, so 2nd columnn
+colnames(dat_use_df)[1] <- "pseudotime"
+dat_use_df <- as.data.frame(dat_use_df[!is.na(dat_use_df[,2]),])
+dat_use_df <- janitor::clean_names(dat_use_df)
+
+
+dat_split <- initial_split(dat_use_df)
+dat_train <- training(dat_split)
+dat_val <- testing(dat_split)
+
+colnames(dat_train) <- stringr::str_replace(colnames(dat_train), "-", ".") #Replace dash with dots in gene names
+colnames(dat_val) <- stringr::str_replace(colnames(dat_val), "-", ".")
+
+dat_train <- na.omit(dat_train)
+#Performing random forest
+model <- rand_forest(mtry = 200, trees = 1400, min_n = 15, mode = "regression") %>%
+  set_engine("ranger", importance = "impurity", num.threads = 3) %>%
+  fit(pseudotime ~ ., data = dat_train) 
+
+#Getting top 200 genes by pseudotime
+var_imp <- sort(model$fit$variable.importance, decreasing = TRUE)
+top_genes <- names(var_imp)[1:200]
+top_genes <- gsub("\\.", "-", top_genes)
+
+output <- data.frame(model$fit$variable.importance)
+colnames(output) <- "Var.Imp"
+write.table(output, file = "DataAnalysis/CellType/CD8.Tcells/slingshot/VarImp_model_B2.txt", col.names=NA, sep="\t",append=F)
+
+output <- read.delim("./DataAnalysis/CellType/CD8.Tcells/slingshot/VarImp_model_B2.txt")
+subset_out <- output %>% top_n(20, wt = Var.Imp)
+
+ggplot(subset_out, aes(x=reorder(X, Var.Imp), y=Var.Imp)) +
+    geom_bar(stat = "identity") + 
+    theme_classic() + 
+    coord_flip() + 
+    theme(axis.title.y = element_blank())
+ggsave("./DataAnalysis/CellType/CD8.Tcells/slingshot/top20_varImp_raw_B2.pdf")
+
+subset_out$Var.Imp <- subset_out$Var.Imp/max(output$Var.Imp)
+
+ggplot(subset_out, aes(x=reorder(X, Var.Imp), y=Var.Imp)) +
+    geom_bar(stat = "identity") + 
+    theme_classic() + 
+    coord_flip() + 
+    theme(axis.title.y = element_blank())
+ggsave("./DataAnalysis/CellType/CD8.Tcells/slingshot/top20_varImp_scaled_B2.pdf")
+
+### Importance for T-cell-related genes 
+
+output <- read.delim("./DataAnalysis/CellType/CD8.Tcells/slingshot/VarImp_model_B2.txt")
+
+subset_out <- subset(output, X %in% genelist)
+
+ggplot(subset_out, aes(x=reorder(X, Var.Imp), y=Var.Imp)) +
+    geom_bar(stat = "identity") + 
+    theme_classic() + 
+    coord_flip() + 
+    theme(axis.title.y = element_blank())
+ggsave("./DataAnalysis/CellType/CD8.Tcells/slingshot/Filtered_varImp_raw_B2.pdf")
+
+subset_out$Var.Imp <- subset_out$Var.Imp/max(output$Var.Imp)
+
+ggplot(subset_out, aes(x=reorder(X, Var.Imp), y=Var.Imp)) +
+    geom_bar(stat = "identity") + 
+    theme_classic() + 
+    coord_flip() + 
+    theme(axis.title.y = element_blank())
+ggsave("./DataAnalysis/CellType/CD8.Tcells/slingshot/Filtered_varImp_scaled_B2.pdf")
 ```
+
+
+```{r}
+library(UpSetR)
+
+files <- list.files("./DataAnalysis/CellType/CD8.Tcells/slingshot", pattern = "txt")[1:4]
+names <- stringr::str_remove(files, ".txt") #remove .txt
+names <- stringr::str_remove(names, " ") #remoce spaces
+names <- as.character(stringr::str_split(names, "_", simplify = T)[,3])
+files <- paste0("./DataAnalysis/CellType/CD8.Tcells/slingshot/", files)
+df.list <- lapply(files, read.delim)
+for (i in seq_along(df.list)) {
+    df.list[[i]] <- subset(df.list[[i]], Var.Imp > 100)
+    df.list[[i]] <- df.list[[i]][,1]
+}
+names(df.list) <- names
+
+
+postscript(file="./DataAnalysis/CellType/CD8.Tcells/slingshot/Overlap_varImp.eps", onefile=FALSE, width=6, height=5)
+upset(fromList(df.list), order.by = "freq")
+dev.off()
+```
+
+
+```{r}
+suppressPackageStartupMessages({
+  library(rlang)
+})
+
+DoMultiBarHeatmap <- function (object, 
+                               features = NULL, 
+                               cells = NULL, 
+                               group.by = "ident", 
+                               additional.group.by = NULL, 
+                               additional.group.sort.by = NULL, 
+                               cols.use = NULL,
+                               group.bar = TRUE, 
+                               disp.min = -2.5, 
+                               disp.max = NULL, 
+                               slot = "data", 
+                               assay = NULL, 
+                               label = TRUE, 
+                               size = 5.5, 
+                               hjust = 0, 
+                               angle = 45, 
+                               raster = TRUE, 
+                               draw.lines = TRUE, 
+                               lines.width = NULL, 
+                               group.bar.height = 0.02, 
+                               combine = TRUE) 
+{
+  cells <- cells %||% colnames(x = object)
+  if (is.numeric(x = cells)) {
+    cells <- colnames(x = object)[cells]
+  }
+  assay <- assay %||% DefaultAssay(object = object)
+  DefaultAssay(object = object) <- assay
+  features <- features %||% VariableFeatures(object = object)
+  ## Why reverse???
+  features <- rev(x = unique(x = features))
+  disp.max <- disp.max %||% ifelse(test = slot == "data", 
+                                   yes = 2.5, no = 6)
+  possible.features <- rownames(x = GetAssayData(object = object, 
+                                                 assay = assay,
+                                                 slot = slot))
+#  if (any(!features %in% possible.features)) {
+#    bad.features <- features[!features %in% possible.features]
+#    features <- features[features %in% possible.features]
+#    if (length(x = features) == 0) {
+#      stop("No requested features found in the ", slot, 
+#           " slot for the ", assay, " assay.")
+#    }
+#    warning("The following features were omitted as they were not found in the ", 
+#            slot, " slot for the ", assay, " assay: ", paste(bad.features, 
+#                                                             collapse = ", "))
+#  }
+  
+  if (!is.null(additional.group.sort.by)) {
+    if (any(!additional.group.sort.by %in% additional.group.by)) {
+      bad.sorts <- additional.group.sort.by[!additional.group.sort.by %in% additional.group.by]
+      additional.group.sort.by <- additional.group.sort.by[additional.group.sort.by %in% additional.group.by]
+      if (length(x = bad.sorts) > 0) {
+        warning("The following additional sorts were omitted as they were not a subset of additional.group.by : ", 
+                paste(bad.sorts, collapse = ", "))
+      }
+    }
+  }
+  
+  data <- as.data.frame(x = as.matrix(x = t(x = GetAssayData(object = object, 
+                                                             slot = slot)[features, cells, drop = FALSE])))
+  
+  object <- suppressMessages(expr = StashIdent(object = object, 
+                                               save.name = "ident"))
+  group.by <- group.by %||% "ident"
+  groups.use <- object[[c(group.by, additional.group.by[!additional.group.by %in% group.by])]][cells, , drop = FALSE]
+  plots <- list()
+  for (i in group.by) {
+    data.group <- data
+    if (!is_null(additional.group.by)) {
+      additional.group.use <- additional.group.by[additional.group.by!=i]  
+      if (!is_null(additional.group.sort.by)){
+        additional.sort.use = additional.group.sort.by[additional.group.sort.by != i]  
+      } else {
+        additional.sort.use = NULL
+      }
+    } else {
+      additional.group.use = NULL
+      additional.sort.use = NULL
+    }
+    
+    group.use <- groups.use[, c(i, additional.group.use), drop = FALSE]
+    
+    for(colname in colnames(group.use)){
+      if (!is.factor(x = group.use[[colname]])) {
+        group.use[[colname]] <- factor(x = group.use[[colname]])
+      }  
+    }
+    
+    if (draw.lines) {
+      lines.width <- lines.width %||% ceiling(x = nrow(x = data.group) * 
+                                                0.0025)
+      placeholder.cells <- sapply(X = 1:(length(x = levels(x = group.use[[i]])) * 
+                                           lines.width), FUN = function(x) {
+                                             return(Seurat:::RandomName(length = 20))
+                                           })
+      placeholder.groups <- data.frame(rep(x = levels(x = group.use[[i]]), times = lines.width))
+      group.levels <- list()
+      group.levels[[i]] = levels(x = group.use[[i]])
+      for (j in additional.group.use) {
+        group.levels[[j]] <- levels(x = group.use[[j]])
+        placeholder.groups[[j]] = NA
+      }
+      
+      colnames(placeholder.groups) <- colnames(group.use)
+      rownames(placeholder.groups) <- placeholder.cells
+      
+      group.use <- sapply(group.use, as.vector)
+      rownames(x = group.use) <- cells
+      
+      group.use <- rbind(group.use, placeholder.groups)
+      
+      for (j in names(group.levels)) {
+        group.use[[j]] <- factor(x = group.use[[j]], levels = group.levels[[j]])
+      }
+      
+      na.data.group <- matrix(data = NA, nrow = length(x = placeholder.cells), 
+                              ncol = ncol(x = data.group), dimnames = list(placeholder.cells, 
+                                                                           colnames(x = data.group)))
+      data.group <- rbind(data.group, na.data.group)
+    }
+    
+    order_expr <- paste0('order(', paste(c(i, additional.sort.use), collapse=','), ')')
+    group.use = with(group.use, group.use[eval(parse(text=order_expr)), , drop=F])
+    
+    plot <- Seurat:::SingleRasterMap(data = data.group, raster = raster, 
+                                     disp.min = disp.min, disp.max = disp.max, feature.order = features, 
+                                     cell.order = rownames(x = group.use), group.by = group.use[[i]])
+    
+    if (group.bar) {
+      pbuild <- ggplot_build(plot = plot)
+      group.use2 <- group.use
+      cols <- list()
+      na.group <- Seurat:::RandomName(length = 20)
+      for (colname in rev(x = colnames(group.use2))) {
+        if (colname == i) {
+          colid = paste0('Identity (', colname, ')')
+        } else {
+          colid = colname
+        }
+        
+        # Default
+        cols[[colname]] <- c(scales::hue_pal()(length(x = levels(x = group.use[[colname]]))))  
+        
+        #Overwrite if better value is provided
+        if (!is_null(cols.use[[colname]])) {
+          req_length = length(x = levels(group.use))
+          if (length(cols.use[[colname]]) < req_length){
+            warning("Cannot use provided colors for ", colname, " since there aren't enough colors.")
+          } else {
+            if (!is_null(names(cols.use[[colname]]))) {
+              if (all(levels(group.use[[colname]]) %in% names(cols.use[[colname]]))) {
+                cols[[colname]] <- as.vector(cols.use[[colname]][levels(group.use[[colname]])])
+              } else {
+                warning("Cannot use provided colors for ", colname, " since all levels (", paste(levels(group.use[[colname]]), collapse=","), ") are not represented.")
+              }
+            } else {
+              cols[[colname]] <- as.vector(cols.use[[colname]])[c(1:length(x = levels(x = group.use[[colname]])))]
+            }
+          }
+        }
+        
+        # Add white if there's lines
+        if (draw.lines) {
+          levels(x = group.use2[[colname]]) <- c(levels(x = group.use2[[colname]]), na.group)  
+          group.use2[placeholder.cells, colname] <- na.group
+          cols[[colname]] <- c(cols[[colname]], "#FFFFFF")
+        }
+        names(x = cols[[colname]]) <- levels(x = group.use2[[colname]])
+        
+        y.range <- diff(x = pbuild$layout$panel_params[[1]]$y.range)
+        y.pos <- max(pbuild$layout$panel_params[[1]]$y.range) + y.range * 0.015
+        y.max <- y.pos + group.bar.height * y.range
+        pbuild$layout$panel_params[[1]]$y.range <- c(pbuild$layout$panel_params[[1]]$y.range[1], y.max)
+        
+        plot <- suppressMessages(plot + 
+                                   annotation_raster(raster = t(x = cols[[colname]][group.use2[[colname]]]),  xmin = -Inf, xmax = Inf, ymin = y.pos, ymax = y.max) + 
+                                   annotation_custom(grob = grid::textGrob(label = colid, hjust = 0, gp = gpar(cex = 0.75)), ymin = mean(c(y.pos, y.max)), ymax = mean(c(y.pos, y.max)), xmin = Inf, xmax = Inf) +
+                                   coord_cartesian(ylim = c(0, y.max), clip = "off")) 
+        
+        if ((colname == i) && label) {
+          x.max <- max(pbuild$layout$panel_params[[1]]$x.range)
+          x.divs <- pbuild$layout$panel_params[[1]]$x.major %||% pbuild$layout$panel_params[[1]]$x$break_positions()
+          group.use$x <- x.divs
+          label.x.pos <- tapply(X = group.use$x, INDEX = group.use[[colname]],
+                                FUN = median) * x.max
+          label.x.pos <- data.frame(group = names(x = label.x.pos), 
+                                    label.x.pos)
+          plot <- plot + geom_text(stat = "identity", 
+                                   data = label.x.pos, aes_string(label = "group", 
+                                                                  x = "label.x.pos"), y = y.max + y.max * 
+                                     0.03 * 0.5, angle = angle, hjust = hjust, 
+                                   size = size)
+          plot <- suppressMessages(plot + coord_cartesian(ylim = c(0, 
+                                                                   y.max + y.max * 0.002 * max(nchar(x = levels(x = group.use[[colname]]))) * 
+                                                                     size), clip = "off"))
+        }
+      }
+    }
+    plot <- plot + theme(line = element_blank())
+    plots[[i]] <- plot
+  }
+  if (combine) {
+    plots <- CombinePlots(plots = plots)
+  }
+  return(plots)
+}
+```
+
+
+
 
 ```{r}
 PT <- as.data.frame(slingPseudotime(sds))
-colnames(PT) <- c("PseudoT1", "PseudoT2", "PseudoT3", "PseudoT4")
+colnames(PT) <- c("PseudoT1", "PseudoT2", "PseudoT3", "PseudoT4", "PseudoT5")
 names <- rownames(PT)
 PT <- PT %>%
   mutate(PT1 = ifelse(is.na(PseudoT1), "No", "Yes")) %>%
   mutate(PT2 = ifelse(is.na(PseudoT2), "No", "Yes")) %>%
   mutate(PT3 = ifelse(is.na(PseudoT3), "No", "Yes")) %>%
-  mutate(PT4 = ifelse(is.na(PseudoT4), "No", "Yes"))
+  mutate(PT4 = ifelse(is.na(PseudoT4), "No", "Yes")) %>%
+  mutate(PT5 = ifelse(is.na(PseudoT5), "No", "Yes"))
 rownames(PT) <- names
 
 Tcells <- AddMetaData(Tcells, PT)
@@ -662,6 +1138,10 @@ saveRDS(Tcells, file = "./data/Processed/CD8.Tcells_FullCluster.rds")
 Tcells <- readRDS("./data/Processed/CD8.Tcells_FullCluster.rds")
 ```
 
+```{r}
+FeaturePlot(Tcells, features = "CTLA4")
+DoMultiBarHeatmap(Tcells, features= c("CD69","FOS", "DUSP4", "JUNB", "XCL1"), group.by="PseudoT3", additional.group.by = c("PT1", "PT2", "PT3", "PT4", "PT5")) + scale_fill_gradientn(colors = rev(colorblind_vector(11)))
+```
 
 ```{r}
 meta <- Tcells[[]]
@@ -854,7 +1334,7 @@ save(ES, file = "./DataAnalysis/CellType/CD8.Tcells/GSEA/H_C5_enrichment.rda")
 
 
 ```{r}
-load("./DataAnalysis/CellType/CD8.Tcells/GSEA/H_enrichment.rda")
+load("./DataAnalysis/CellType/CD8.Tcells/GSEA/H_C5_enrichment.rda")
 meta <- Tcells[[]]
 meta <- merge(meta, ES, by = "row.names")
 names <- colnames(ES)
@@ -949,6 +1429,8 @@ write.table(x , file = "DataAnalysis/CellType/CD8.Tcells/GSEA/Corr_PT3.txt", col
 ```
 
 
+
+
 ***
 
 Russ requested pathways
@@ -994,5 +1476,59 @@ for (i in seq_along(unique)) {
   plot <- plot + NoLegend()
   ggsave(path = "./DataAnalysis/CellType/CD8.Tcells/GSEA", filename=paste0(unique[i], ".eps"), plot, width=3.5, height=3)
 }
+```
+
+```{r}
+ES2 <- get(load("./DataAnalysis/CellType/CD8.Tcells/GSEA/Requested_enrichment.rda"))
+```
+
+```{r}
+filter <- ES[,grepl("HALLMARK",colnames(ES))]
+filter <- cbind(filter,ES2)
+meta <- Tcells[[]]
+meta <- merge(meta, filter, by = "row.names")
+```
+
+```{r}
+heatmap <- meta[, c("newCluster", colnames(filter))]
+melted <- reshape2::melt(heatmap, id.vars = c("newCluster"))
+meanvalues <- melted %>%
+  group_by(newCluster, variable) %>%
+  summarise(median(value))
+
+matrix <- reshape2::dcast(meanvalues, newCluster ~ variable)
+rownames(matrix) <- matrix[,1]
+matrix <- matrix[,-1]
+
+pdf("test.pdf", height=12, width=5)
+pheatmap::pheatmap(t(matrix), color = rev(colorblind_vector(50)), scale = "row", fontsize_row = 3, cluster_rows = T, cluster_cols = T)
+dev.off()
+
+GOI <- c("HALLMARK_INFLAMMATORY_RESPONSE", "T1_Interferon", "T2_Interferon", "Activated", "Exhuasted", "T_Cell_Terminal_Differentiation", "HALLMARK_HYPOXIA", "HALLMARK_IL2_STAT5_SIGNALING","HALLMARK_IL6_JAK_STAT3_SIGNALING","HALLMARK_NOTCH_SIGNALING", "HALLMARK_TGF_BETA_SIGNALING","HALLMARK_HEDGEHOG_SIGNALING","HALLMARK_DNA_REPAIR", "Cytolytic", "Glycolysis", "TCA_cycle")
+sub <- matrix[,colnames(matrix) %in% GOI]
+
+pdf("./DataAnalysis/CellType/CD8.Tcells/GSEA/SelectGSEAheatmap.pdf", height=4, width=4)
+pheatmap::pheatmap(t(sub), color = rev(colorblind_vector(50)), scale = "row", fontsize_row = 3, cluster_rows = T, cluster_cols = F)
+dev.off()
+```
+
+```{r}
+library(pathwork)
+
+branches <- c("PT1", "PT2", "PT3", "PT4", "PT5")
+sets <- colnames(filter)
+for(j in seq_along(sets)) {
+    plot_list <- list()
+    for (i in seq_along(branches)) {
+        plot_list[[i]] <- ggplot(meta, aes(x=meta[,branches[i]], y=meta[,sets[j]])) + 
+                            geom_boxplot(outlier.alpha = 0) +
+                            theme_classic() + 
+                            ylab(sets[j]) + 
+                            theme(axis.title.x = element_blank(),
+                                    axis.ticks.x = element_blank(), 
+                                    axis.text.x = element_blank())
+    }
+}
+plot_list
 ```
 

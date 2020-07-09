@@ -660,6 +660,11 @@ meta %>%
 ```
 
 ```{r}
+
+
+
+
+
 table <- meta %>%
     group_by(orig.ident, type, Minor) %>%
     summarise(n = n()) %>%
@@ -673,6 +678,17 @@ ggplot(table, aes(x=Minor, y=freq, fill = type)) +
     scale_fill_manual(values = colorblind_vector(3))
 ggsave("DataAnalysis/UMAP/CellType_proportion_byType.pdf", height=2, width=6)
 
+
+table <- meta %>%
+    group_by(Minor) %>%
+    summarise(n = n())
+
+ggplot(table, aes(x=reorder(Minor, n), y=n)) +
+    stat_summary(geom="bar", aes(fill = Minor)) + 
+    theme_classic()  + 
+    guides(fill = F) + 
+    coord_flip()
+ggsave("DataAnalysis/UMAP/CellType_sum_byType.pdf", height=3, width=2)
 ```
 
 ```{r}
@@ -684,5 +700,8 @@ for (i in seq_along(unique)) {
     print(summary(aov))
     
 }
+```
+```{r}
+
 ```
 
