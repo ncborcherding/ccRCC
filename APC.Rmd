@@ -185,6 +185,7 @@ Based on the review of the output above, we have selected the following paramete
 
 ```{r eval = FALSE}
 APC <- ScaleData(object = APC, verbose = FALSE)
+APC <- FindVariableFeatures(APC)
 APC <- RunPCA(object = APC, npcs = 40, verbose = FALSE)
 APC <- RunUMAP(object = APC, reduction = "pca", 
     dims = 1:30)
@@ -197,7 +198,7 @@ APC <- FindClusters(object = APC, resolution = 0.5, force.recalc=T)
 ## Visualizing New Clusters
 ```{r}
 APC@meta.data$newCluster <- APC@active.ident
-DimPlot(object = APC, reduction = 'umap', label = T, ) + NoLegend()
+DimPlot(object = APC, reduction = 'umap', label = T) + NoLegend()
 ggsave(path = "./DataAnalysis/CellType/APC", filename="IntegratedObject_byCluster.eps", width=3.5, height=3)
 DimPlot(object = APC, reduction = 'umap', group.by = "type") 
 ggsave(path = "./DataAnalysis/CellType/APC", filename="IntegratedObject_byType.eps", width=4, height=3)
