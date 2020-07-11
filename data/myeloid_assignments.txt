@@ -1,6 +1,6 @@
 Cluster	Class	Assignment	Macrophage Specific
 0	Macrophage	Macrophage	TAM
-1	Monocyte	Macrophage	TAM
+1	Monocyte	CD14- CD16- Monocyte	TAM
 2	Monocyte	CD14+ Monocyte	
 3	Macrophage	Macrophage	TAM
 4	Monocyte	CD14+ Monocyte	
