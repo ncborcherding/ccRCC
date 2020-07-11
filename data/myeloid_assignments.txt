@@ -1,0 +1,21 @@
+Cluster	Class	Assignment	Macrophage Specific
+0	Macrophage	Macrophage	TAM
+1	Monocyte	Macrophage	TAM
+2	Monocyte	CD14+ Monocyte	
+3	Macrophage	Macrophage	TAM
+4	Monocyte	CD14+ Monocyte	
+5	Monocyte	CD14+ Monocyte	
+6	Monocyte	CD16+ Monocyte	
+7	Macrophage	Macrophage	TAM
+8	Monocyte	CD16+ Monocyte	
+9	Monocyte	CD16+ Monocyte	
+10	Monocyte	CD14+ Monocyte	
+11	Monocyte	CD14- CD16- Monocyte	
+12	Monocye	CD14- CD16- Monocyte	
+13	Macrophage	Macrophage	Resident Macrophage
+14	Macrophage	Macrophage	nonTAM
+15	DC	cDC1	
+16	DC	pDC	
+17	Monocyte	CD14+ Monocyte	
+18	Monocye	CD14- CD16- Monocyte	
+19	DC	moDC	
