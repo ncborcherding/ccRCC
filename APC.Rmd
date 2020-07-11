@@ -46,7 +46,13 @@ colorblind_vector <- colorRampPalette(c("#FF4B20", "#FFB433", "#C6FDEC", "#7AC5F
 
 # Initial Subsetting and Analysis
 
-```{r}
+```{r} 
+#Removing cells with clonotype information
+cell <- integrated[[]]
+cell <- subset(cell, is.na(cloneType))
+cell <- rownames(cell)
+integrated <- subset(integrated, cells = cell)
+#Subsetting only APC cells
 APC <- subset(integrated, Major == "APC")
 APC <- NormalizeData(APC)
 rm(integrated)
@@ -148,14 +154,6 @@ Now we can process the intgreated T cells and identify clusters.
 ```{r eval = FALSE}
 APC <- readRDS("./data/Processed/APC_Precluster.rds")
 
-#Remove any cells with clonotype information attached
-cellnames <- subset(APC[[]], !is.na(cloneType))
-cellnames <- rownames(cellnames)
-'%!in%' <- function(x,y)!('%in%'(x,y))
-names <- rownames(APC[[]])
-names <- names[names %!in% cellnames]
-APC <- subset(APC, cells = names)
-
 dir.create("./DataAnalysis/CellType/APC/DimensionInputs")
 for (i in c(10,15,20,25,30,35,40)) {
     
@@ -185,7 +183,6 @@ Based on the review of the output above, we have selected the following paramete
 
 ```{r eval = FALSE}
 APC <- ScaleData(object = APC, verbose = FALSE)
-APC <- FindVariableFeatures(APC)
 APC <- RunPCA(object = APC, npcs = 40, verbose = FALSE)
 APC <- RunUMAP(object = APC, reduction = "pca", 
     dims = 1:30)
@@ -198,15 +195,10 @@ APC <- FindClusters(object = APC, resolution = 0.5, force.recalc=T)
 ## Visualizing New Clusters
 ```{r}
 APC@meta.data$newCluster <- APC@active.ident
-DimPlot(object = APC, reduction = 'umap', label = T) + NoLegend()
+DimPlot(object = APC, reduction = 'umap', label = T, ) + NoLegend()
 ggsave(path = "./DataAnalysis/CellType/APC", filename="IntegratedObject_byCluster.eps", width=3.5, height=3)
 DimPlot(object = APC, reduction = 'umap', group.by = "type") 
-ggsave(path = "./DataAnalysis/CellType/APC", filename="IntegratedObject_byType.eps", width=4, height=3)
-
-a <- DimPlot(object = APC, reduction = 'umap', split.by = "type", group.by = "type")  + NoLegend() + NoAxes() + facet_wrap(~type)
-a2 <- a + stat_density_2d(a$data, mapping = aes(x = a$data[,"UMAP_1"], y = a$data[,"UMAP_2"]), color = "black") 
-a2
-ggsave(path = "./DataAnalysis/CellType/APC", filename="IntegratedObject_byType_faceted.eps", width=10.5, height=3)
+ggsave(path = "./DataAnalysis/CellType/APC", filename="IntegratedObject_byType.eps", width=3.75, height=3)
 ```
 
 ## Calculating the relative proportion of types in each cluster
@@ -262,7 +254,7 @@ Here is a list I use in T cell identification, we can run these first and store 
 
 ```{r}
 genelist <- read.delim("./data/immune_sign.txt")
-genelist <- c(genelist$M1.Macro, genelist$M2.Macro, genelist$DC1, genelist$DC2, genelist$DC3, genelist$DC4, genelist$DC5, genelist$DC6, genelist$Langerhan, "ITGAX", "LY75", "CD8A", "CD4", "ITGAM", "FCGR1A", "BST2", "TLR9", "SIGLEC1")
+genelist <- c(genelist$M1.Macro, genelist$M2.Macro, genelist$DC1, genelist$DC2, genelist$DC3, genelist$DC4, genelist$DC5, genelist$DC6, genelist$Langerhan, "ITGAX", "LY75", "CD8A", "CD4", "ITGAM", "FCGR1A", "BST2", "TLR9")
 genelist <- toupper(unique(genelist))
 
 
