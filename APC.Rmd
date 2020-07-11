@@ -192,9 +192,37 @@ APC <- FindClusters(object = APC, resolution = 0.8, force.recalc=T)
 
 # Subclustering Analysis
 
+After the analysis below - Cluster 5 is principly composed of CD3+ T cells. I am going to use the cellselector function in Seurat to remove this cluster and rename the identities.
+```{r, eval = F}
+plot <- DimPlot(APC, reduction = "umap")
+sc5.cells <- CellSelector(plot=plot)
+APC <- subset(APC, cells = sc5.cells, invert = TRUE)
+APC <- subset(APC, idents = 5, invert = TRUE)
+APC <- subset(APC, idents = 20, invert = T)
+```
+
+```{r}
+APC <- RenameIdents(object = APC, '6' = '5', 
+                                                '7' = '6', 
+                                                '8' = '7', 
+                                                '9' = '8',
+                                                '10' = '9', 
+                                                '11' = '10', 
+                                                '12' = '11', 
+                                                '13' = '12',
+                                                '14' = '13', 
+                                                '15' = '14', 
+                                                '16' = '15', 
+                                                '17' = '16',
+                                                '18' = '17', 
+                                                '19' = '18', 
+                                                '20' = '19')
+```
+
 ## Visualizing New Clusters
 ```{r}
 APC@meta.data$newCluster <- APC@active.ident
+APC@active.ident <- factor(APC@active.ident, levels = c(0:20))
 DimPlot(object = APC, reduction = 'umap', label = T, ) + NoLegend()
 ggsave(path = "./DataAnalysis/CellType/APC", filename="IntegratedObject_byCluster.eps", width=3.5, height=3)
 DimPlot(object = APC, reduction = 'umap', group.by = "type") 
@@ -204,18 +232,6 @@ a <- DimPlot(object = APC, reduction = 'umap', split.by = "type", group.by = "ty
 a2 <- a + stat_density_2d(a$data, mapping = aes(x = a$data[,"UMAP_1"], y = a$data[,"UMAP_2"]), color = "black") 
 a2
 ggsave(path = "./DataAnalysis/CellType/APC", filename="IntegratedObject_byType_faceted.eps", width=10.5, height=3)
-```
-
-After the analysis below - Cluster 5 is principly composed of CD3+ T cells. I am going to use the cellselector function in Seurat to remove this cluster and rename the identities.
-```{r}
-plot <- DimPlot(APC, reduction = "umap")
-sc5.cells <- CellSelector(plot=plot)
-APC <- subset(APC, cells = sc5.cells, invert = TRUE)
-APC <- subset(APC, idents = 5, invert = TRUE)
-```
-
-```{r}
-pbmc_small <- RenameIdents(object = pbmc_small, '0' = 'A', '2' = 'C')
 ```
 
 
@@ -323,7 +339,7 @@ DotPlot(APC, features = unique(top10$gene)) + coord_flip() +
     scale_color_gradientn(colors = rev(colorblind_vector(11))) + 
     guides(color = F, size = F) +
     scale_size(range = c(0.5,3.5))
-ggsave(path = "DataAnalysis/CellType/APC/markers", file = "Top10_dotplot.eps", height=18, width=4)
+ggsave(path = "DataAnalysis/CellType/APC/markers", file = "Top10_dotplot.eps", height=22, width=4)
 ```
 
 ## Correlating Markers with SingleR Output
@@ -438,6 +454,49 @@ dev.off()
 
 ```
 
+
+
+## Making Cell Type Assignments
+```{r}
+assign <- read.delim("./data/myeloid_assignments.txt")
+meta <- APC[[]]
+meta <- meta[,1:25]
+meta$barcode <- rownames(meta)
+merge <- merge(meta, assign, by.x = "newCluster", by.y = "Cluster")
+rownames(merge) <- merge$barcode
+merge <- merge[,c("Class", "Assignment", "Macrophage.Specific")]
+APC <- AddMetaData(APC, merge)
+```
+
+```{r}
+merge <- merge(meta, assign, by.x = "newCluster", by.y = "Cluster")
+
+table <- merge %>%
+    group_by(orig.ident, type, Assignment) %>%
+    summarise(n = n()) %>%
+    mutate(freq = n / sum(n)) 
+
+table$type <- factor(table$type, levels = c("P", "K", "T"))
+ggplot(table, aes(x=Assignment, y=freq, fill = type)) +
+    geom_boxplot() + 
+    facet_grid(.~Assignment, scales = "free_x") + 
+    theme_classic() + 
+    scale_fill_manual(values = rev(colorblind_vector(3)))
+
+ggsave("./DataAnalysis/CellType/APC/CellType_proportion_byType.pdf", height=2, width=6)
+```
+```{r}
+unique <- unique(merge$Assignment)
+
+for (i in seq_along(unique)) {
+    tmp <- subset(table, Assignment == unique[i])
+    aov <- aov(tmp$freq~ tmp$type)
+    print(summary(aov))
+    
+}
+```
+
+
 ***
 
 # Differential Gene Expression
@@ -462,34 +521,7 @@ mat <- data.frame(markers)
                 sep="\t",append=F, row.names = FALSE)
 ```
 
-### By Cluster comparison
-```{r}
-
-DefaultAssay(TumorOnly) <- "RNA"
-TumorOnly <- subset(APC, orig.ident == "P1" | orig.ident ==  "P2" | orig.ident ==  "P3")
-clusters <- as.character(unique(TumorOnly@active.ident))
-mat <- NULL
-for (i in c(1:11,14)) {
-    tmp <- subset(TumorOnly, idents = clusters[i])
-    tmp <- NormalizeData(tmp, assay = "RNA") #after subset always normalize RNA
-    tmp <- SetIdent(tmp, value = tmp@meta.data$type)
-    markers <- FindMarkers(object = tmp, 
-                only.pos = F, ident.1 = "T", ident.2="P", min.diff.pct = -Inf, 
-                logfc.threshold = -Inf, min.pct = -Inf)
-    markers$names <- rownames(markers)
-    markers  <- markers  %>%
-        mutate(Difference = pct.1 - pct.2)
-    
-    mat <- data.frame(markers)
-    write.table(mat, file=paste("./DataAnalysis/CellType/APC/DGE/TvPB_differentialMarkers_", clusters[i], ".txt", sep=""),
-                sep="\t",append=F, row.names = FALSE)
-    mat=NULL
-}
-```
-
-## Comparing tumor vs normal kidney parenchyma
-
-### Overall comparison
+### Overall comparison tumor vs normal kidney parenchyma
 
 ```{r}
 dir.create("DataAnalysis/CellType/APC/DGE")
@@ -507,31 +539,7 @@ mat <- data.frame(markers)
                 sep="\t",append=F, row.names = FALSE)
 ```
 
-### By Cluster comparison
-```{r}
-subset <- subset(APC, Run == "P1_T" |  Run == "P2_T" |  Run == "P3_T" |  Run == "N2_K" |  Run == "N3_K" |  Run == "N4_K")
-clusters <- as.character(unique(subset@active.ident))
-DefaultAssay(subset) <- "RNA"
 
-
-mat <- NULL
-for (i in seq_along(clusters)) {
-    tmp <- subset(subset, idents = clusters[i])
-    tmp <- NormalizeData(tmp, assay = "RNA") #after subset always normalize RNA
-    tmp <- SetIdent(tmp, value = tmp@meta.data$type)
-    markers <- FindMarkers(object = tmp, 
-                only.pos = F, ident.1 = "T", ident.2="K", min.diff.pct = -Inf, 
-                logfc.threshold = -Inf, min.pct = -Inf)
-    markers$names <- rownames(markers)
-    markers  <- markers  %>%
-        mutate(Difference = pct.1 - pct.2)
-    
-    mat <- data.frame(markers)
-    write.table(mat, file=paste("./DataAnalysis/CellType/APC/DGE/TvK_differentialMarkers_", clusters[i], ".txt", sep=""),
-                sep="\t",append=F, row.names = FALSE)
-    mat=NULL
-}
-```
 
 ## Comparing peripheral blood of patients to peripheral blood of normal healthy
 
@@ -612,6 +620,84 @@ ggplot(tmp, aes(x=avg_logFC, y=-log10(p_val_adj))) +
 ggsave(path = "DataAnalysis/CellType/APC/DGE/visualizations", file = paste0("VolcanoPlot_", names(marker_list[i]), ".pdf"), height = 2.5, width=2.5)
 }
 ```
+
+***
+
+# Only Macrophasges
+
+```{r}
+Macro <- subset(APC, Assignment == "Macrophage")
+plot <- DimPlot(Macro, reduction = "umap")
+outliers <- CellSelector(plot=plot)
+Macro <- subset(Macro, cells = outliers, invert = TRUE)
+saveRDS(Macro, file = "./data/Processed/Macrophage_FullCluster.rds")
+```
+
+
+```{r}
+dir.create("DataAnalysis/CellType/APC/Macrophage")
+colors <- scales::hue_pal()(20)
+colors <- colors[c(1,4,8,14,15)]
+DimPlot(object = Macro, reduction = 'umap', label = T) + NoLegend() +
+  scale_color_manual(values = colors)
+ggsave("DataAnalysis/CellType/APC/Macrophage/UMAP_byCluster.eps", width=3.5, height=3)
+```
+
+We can also look at the top markers for each cluster by using the *FindAllMarkers()* call.
+
+```{r}
+dir.create("DataAnalysis/CellType/APC/Macrophage/markers/")
+Macro <- NormalizeData(Macro)
+All.markers <- FindAllMarkers(Macro, assay = "RNA", pseudocount.use = 0.1, only.pos = T) 
+write.table(All.markers, file = "DataAnalysis/CellType/APC/Macrophage/markers/FindAllMarkers_output.txt", col.names=NA, sep="\t",append=F)
+```
+
+```{r}
+All.markers <- read.delim("./DataAnalysis/CellType/APC/Macrophage/markers/FindAllMarkers_output.txt")
+
+suppressPackageStartupMessages(library(schex))
+Macro <- make_hexbin(Macro, 40, dimension_reduction = "UMAP")
+
+top10 <- All.markers %>% group_by(cluster) %>% top_n(n = 10, wt = avg_logFC)
+top10 <- top10$gene #just want the IDs
+
+dir.create("DataAnalysis/CellType/APC/Macrophage/markers/TopClusterMarkers")
+for (i in seq_along(top10)) {
+    plot <- plot_hexbin_feature(Macro, feature = top10[i], type = "counts", action = "prop_0")+ 
+             guides(fill=F, color = F) + 
+                scale_fill_gradientn(colors = rev(colorblind_vector(13))) 
+        ggsave(path = "DataAnalysis/CellType/APC/Macrophage/markers/TopClusterMarkers", file = paste0("Top10markers", "_", top10[i], "_prop.pdf"), plot, height=3, width=3.25)
+}
+```
+
+
+```{r}
+top10 <- All.markers %>% group_by(cluster) %>% top_n(n = 10, wt = avg_logFC)
+DotPlot(Macro, features = unique(top10$gene)) + coord_flip() + 
+    scale_color_gradientn(colors = rev(colorblind_vector(11))) + 
+    guides(color = F, size = F) +
+    scale_size(range = c(0.5,3.5))
+ggsave(path = "DataAnalysis/CellType/APC/Macrophage/markers", file = "Top10_dotplot.eps", height=10, width=3)
+```
+
+```{r}
+select <- c("FCGR1A", "CD68", "CD36", "TFRC", "CD20", "MRC1", "ANPEP", "MSR1", "IL3RA", "ITGAM", "CD40", "SLAMF7", "CD3D", "PDCD1LG2", "NRP1", "CD82", "PDCD1", "IFNGR1", "CD7", "CD4", "FCGR2", "FCGR3A", "CD14", "CD163", "SIGLEC1", "CD86", "CD81", "C5AR1", "ICAM1", "HLA-A", "HLA-B", "HLA-C", "HLA-DRA", "HLA-DRB1")
+
+
+filter <- All.markers[All.markers$gene %in% select,]
+top <- filter %>% group_by(cluster) %>% top_n(n = 10, wt = avg_logFC)
+top <- rbind.data.frame(top,top10)
+top <- top
+
+
+
+DotPlot(Macro, features = unique(top$gene)) + coord_flip() + 
+    scale_color_gradientn(colors = rev(colorblind_vector(11))) + 
+    guides(color = F, size = F) +
+    scale_size(range = c(0.5,3.5))
+```
+
+
 
 ***
 
