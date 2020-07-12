@@ -709,51 +709,9 @@ ES <- enrichIt(obj = Macro, gene.sets = GS, groups = 1000, cores = 4)
 save(ES, file = "./DataAnalysis/CellType/APC/Macrophage/GSEA/H_enrichment.rda")
 ```
 
-
-```{r}
-load("./DataAnalysis/CellType/APC/GSEA/H_enrichment.rda")
-meta <- APC[[]]
-meta <- merge(meta, ES, by = "row.names")
-names <- colnames(ES)
-type_sig <- getSignificance(meta[,c("type",names)], group = "type")
-cluster_sig <- getSignificance(meta[,c("newCluster",names)], group = "newCluster")
-
-write.table(type_sig , file = "DataAnalysis/CellType/APC/GSEA/lmfit_byType.txt", col.names=NA, sep="\t",append=F)
-write.table(cluster_sig, file = "DataAnalysis/CellType/APC/GSEA/lmfit_byCluster.txt", col.names=NA, sep="\t",append=F)
-```
-
-
-```{r}
-top10 <- cluster_sig %>% top_n(10, wt=F)
-top10 <- rownames(top10)
-
-for (i in seq_along(top10)){
-  ridgeEnrichment(meta, gene.set = top10[i], group = "newCluster", add.rug = TRUE) + facet_grid(.~type)
-  ggsave(path = "DataAnalysis/CellType/APC/GSEA/", file = paste0("Ridge_ClusterTop10_TypevsCluster_", top10[i], ".pdf"), height=3, width=5)
-}
-
-for (i in seq_along(top10)){
-  ridgeEnrichment(meta, gene.set = top10[i], group = "newCluster", add.rug = TRUE) 
-  ggsave(path = "DataAnalysis/CellType/APC/GSEA/", file = paste0("Ridge_ClusterTop10_Cluster_", top10[i], ".pdf"), height=3, width=5)
-}
-
-
-top10 <- type_sig %>% top_n(10, wt=F)
-top10 <- rownames(top10)
-for (i in seq_along(top10)){
-  ridgeEnrichment(meta, gene.set = top10[i], group = "type", add.rug = TRUE)
-  ggsave(path = "DataAnalysis/CellType/APC/GSEA/", file = paste0("Ridge_ClusterTop10_Type_", top10[i], ".pdf"), height=3, width=5)
-}
-
-
-```
-
 ```{r}
 sign <- read.delim("./data/immune_sign.txt")[,c(1:20, 63:69)]
 full<- as.list(sign)
-```
-
-```{r}
 
 
 unique <- names(full) 
@@ -768,27 +726,58 @@ for (i in seq_along(unique)) {
 }
 
 list <- GSEABase::GeneSetCollection(list)
+
+ES2 <- enrichIt(obj = Macro, gene.sets = list, groups = 1000, cores = 4)
+save(ES2, file = "./DataAnalysis/CellType/APC/Macrophage/GSEA/Requested_enrichment.rda")
 ```
+
 
 
 ```{r}
-ES2 <- enrichIt(obj = APC, gene.sets = list, groups = 1000, cores = 4)
-save(ES2, file = "./DataAnalysis/CellType/APC/GSEA/Requested_enrichment.rda")
+filter <- cbind(ES,ES2)
+meta <- Macro[[]]
+meta <- merge(meta, filter, by = "row.names")
 ```
 
 ```{r}
-APC <- AddMetaData(APC, ES2)
+heatmap <- meta[, c("newCluster", colnames(filter))]
+melted <- reshape2::melt(heatmap, id.vars = c("newCluster"))
+meanvalues <- melted %>%
+  group_by(newCluster, variable) %>%
+  summarise(median(value))
+
+matrix <- reshape2::dcast(meanvalues, newCluster ~ variable)
+rownames(matrix) <- matrix[,1]
+matrix <- matrix[,-1]
+
+pdf("test.pdf", height=12, width=5)
+pheatmap::pheatmap(t(matrix[c(4,5,1,2,3),]), color = rev(colorblind_vector(50)), scale = "row", fontsize_row = 3, cluster_rows = T, cluster_cols = F)
+dev.off()
+
+GOI <- c("HALLMARK_INFLAMMATORY_RESPONSE", "HALLMARK_ANGIOGENESIS", "HALLMARK_TNFA_SIGNALING_VIA_NFKB", "M2.Macro", "Proinflammatory", "Glycolysis", "TCA_Cycle", "M1.Macro", "HALLMARK_INTERFERON_GAMMA_RESPONSE", "HALLMARK_IL6_JAK_STAT3_SIGNALING", "HALLMARK_INTERFERON_ALPHA_RESPONSE", "Lipid_mediators", "HALLMARK_HYPOXIA", "HALLMARK_IL2_STAT5_SIGNALING")
+sub <- matrix[,colnames(matrix) %in% GOI]
+
+pdf("./DataAnalysis/CellType/APC/Macrophage/GSEA/SelectGSEAheatmap.pdf", height=4, width=4)
+pheatmap::pheatmap(t(sub[c(4,5,1,2,3),]), color = rev(colorblind_vector(50)), scale = "row", fontsize_row = 3, cluster_rows = T, cluster_cols = F)
+dev.off()
 ```
 
 ```{r}
-for (i in seq_along(unique)) {
-  plot <- FeaturePlot(APC, features = unique[i]) + 
-  scale_color_gradientn(colors = rev(colorblind_vector(11)))
-  plot <- plot + NoLegend()
-  ggsave(path = "./DataAnalysis/CellType/APC/GSEA", filename=paste0(unique[i], ".eps"), plot, width=3.5, height=3)
-}
-```
 
+freq_table <- meta[,c("orig.ident", "newCluster")]
+freq_table <- freq_table %>%
+    group_by(orig.ident, newCluster) %>%
+    summarise(n = n())
+freq_table <- subset(freq_table, orig.ident == "P1" | orig.ident == "P2" | orig.ident == "P3")
+freq_table <- freq_table %>%
+  mutate(Prop = ifelse(orig.ident =="P1", n/10694, 
+                       ifelse(orig.ident == "P2", n/5174, n/9805)))
+freq_table$newCluster <- factor(freq_table$newCluster, levels = c(0,3,7,13,14))
+ggplot(freq_table, aes(x=newCluster, y=Prop, fill = orig.ident)) + 
+         geom_bar(stat="identity", position = "fill") + 
+  theme_classic()
+ggsave("./DataAnalysis/CellType/APC/Macrophage/patientBreakdown.pdf")
+```
 
 
 ***
@@ -796,12 +785,13 @@ for (i in seq_along(unique)) {
 # Trajectory
 
 ```{r}
+Myeloid <- subset(APC, Class == "Macrophage" | Assignment == "Mo")
 library(slingshot)
-dir.create("./DataAnalysis/CellType/APC/slingshot")
+dir.create("./DataAnalysis/CellType/APC/Macrophage/slingshot")
 
-sce <- as.SingleCellExperiment(APC) 
+sce <- as.SingleCellExperiment(Macro) 
 
-sds <- slingshot(Embeddings(APC, "umap"), clusterLabels = APC@active.ident, allow.breaks = TRUE, stretch = 0, reducedDim = "UMAP") #Calcualting the trajectory
+sds <- slingshot(Embeddings(Macro, "umap"), clusterLabels = Macro@active.ident, allow.breaks = TRUE, stretch = 0, reducedDim = "UMAP") #Calcualting the trajectory
 ```
 
 ```{r}
@@ -819,13 +809,13 @@ cell_pal <- function(cell_vars, pal_fun,...) {
 }
 #We need color palettes Leiden clusters. These would be the same colors seen in the Seurat plots.
 
-cell_colors_clust <- cell_pal(APC@active.ident, hue_pal())
+cell_colors_clust <- cell_pal(Macro@active.ident, hue_pal())
 
-pdf("./DataAnalysis/CellType/APC/slingshot/Trajectory.pdf", height=4, width=4)
+pdf("./DataAnalysis/CellType/APC/Macrophage/slingshot/Trajectory.pdf", height=4, width=4)
 plot(reducedDim(sds), col = cell_colors_clust, pch = 16, cex = 0.25)
 lines(sds, lwd = 2, type = 'lineages', col = 'black')
 dev.off()
-pdf("./DataAnalysis/CellType/APC/slingshot/Trajectory2.pdf", height=4, width=4)
+pdf("./DataAnalysis/CellType/APC/Macrophage/slingshot/Trajectory2.pdf", height=4, width=4)
 plot(reducedDim(sds), col = cell_colors_clust, pch = 16, cex = 0.5)
 lines(sds, lwd = 2, col = 'black')
 dev.off()
@@ -836,9 +826,9 @@ nc <- 2
 pt <- slingPseudotime(sds)
 nms <- colnames(pt)
 nr <- ceiling(length(nms)/nc)
-pal <- rev(colorblind_vector(100))
+pal <- colorblind_vector(100)
 par(mfrow = c(nr, nc))
-pdf("./DataAnalysis/CellType/APC/slingshot/Trajectory2_pseudotime.pdf", height=4, width=4)
+pdf("./DataAnalysis/CellType/APC/Macrophage/slingshot/Trajectory2_pseudotime.pdf", height=4, width=4)
 for (i in nms) {
   colors <- pal[cut(pt[,i], breaks = 100)]
   plot(reducedDim(sds), col = colors, pch = 16, cex = 0.5, main = i)
@@ -847,85 +837,14 @@ for (i in nms) {
 dev.off()
 ```
 
-## Using pseudotime to rank genes
-
-```{r}
-library(rsample)
-library(tidymodels)
-
-APC <- FindVariableFeatures(APC)
-
-# Get top 498 highly variable genes
-top_hvg <- HVFInfo(APC) %>% 
-  mutate(., bc = rownames(.)) %>% 
-  arrange(desc(variance)) %>% 
-  top_n(300, variance) %>% 
-  pull(bc)
-# Prepare data for random forest
-dat_use <- t(as.matrix(GetAssayData(APC, slot = "data"))[top_hvg,])
-dat_use_df <- cbind(slingPseudotime(sds)[,1], dat_use) # Do curve 2, so 2nd columnn
-colnames(dat_use_df)[1] <- "pseudotime"
-dat_use_df <- as.data.frame(dat_use_df[!is.na(dat_use_df[,1]),])
-
-
-dat_split <- initial_split(dat_use_df)
-dat_train <- training(dat_split)
-dat_val <- testing(dat_split)
-
-colnames(dat_train) <- stringr::str_replace(colnames(dat_train), "-", ".") #Replace dash with dots in gene names
-colnames(dat_val) <- stringr::str_replace(colnames(dat_val), "-", ".")
-
-#Performing random forest
-model <- rand_forest(mtry = 200, trees = 1400, min_n = 15, mode = "regression") %>%
-  set_engine("ranger", importance = "impurity", num.threads = 3) %>%
-  fit(pseudotime ~ ., data = dat_train) 
-
-#Getting top 200 genes by pseudotime
-var_imp <- sort(model$fit$variable.importance, decreasing = TRUE)
-top_genes <- names(var_imp)[1:200]
-top_genes <- gsub("\\.", "-", top_genes)
-
-output <- data.frame(model$fit$variable.importance)
-colnames(output) <- "Var.Imp"
-write.table(output, file = "DataAnalysis/CellType/APC/slingshot/VarImp_model.txt", col.names=NA, sep="\t",append=F)
-```
-
-```{r}
-output <- read.delim("./DataAnalysis/CellType/APC/slingshot/VarImp_model.txt")
-subset_out <- output %>% top_n(20, wt = Var.Imp)
-
-ggplot(subset_out, aes(x=reorder(X, Var.Imp), y=Var.Imp)) +
-    geom_bar(stat = "identity") + 
-    theme_classic() + 
-    coord_flip() + 
-    theme(axis.title.y = element_blank())
-ggsave("./DataAnalysis/CellType/APC/slingshot/top20_varImp_raw.pdf")
-
-subset_out$Var.Imp <- subset_out$Var.Imp/max(output$Var.Imp)
-
-ggplot(subset_out, aes(x=reorder(X, Var.Imp), y=Var.Imp)) +
-    geom_bar(stat = "identity") + 
-    theme_classic() + 
-    coord_flip() + 
-    theme(axis.title.y = element_blank())
-ggsave("./DataAnalysis/CellType/APC/slingshot/top20_varImp_scaled.pdf")
-```
-
-
-
-
-```{r}
-PT <- as.data.frame(slingPseudotime(sds))
-colnames(PT) <- c("PseudoT1", "PseudoT2")
-APC <- AddMetaData(APC, PT)
-saveRDS(APC, file = "./data/Processed/APC_FullCluster.rds")
-APC <- readRDS("./data/Processed/APC_FullCluster.rds")
-```
-
-
-
 ***
 
-#ssGSEA
+```{r}
+Macro <- NormalizeData(Macro)
+markers <- FindAllMarkers(Macro, logfc = 0.0, min.pct = 0, pseudocount.use = 0.1, only.pos = TRUE)
 
+  
+write.table(markers, file="./DataAnalysis/CellType/APC/Macrophage/FindAllMarkers.txt",
+                sep="\t",append=F, row.names = FALSE)
+```
 
