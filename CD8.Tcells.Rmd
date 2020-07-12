@@ -1038,6 +1038,7 @@ Pseudotime Assignments
 
 
 ```{r}
+meta <- Tcells[[]]
 unique <- stringr::str_sort(as.character(unique(meta[,"PT1"])), numeric = TRUE)
     df <- NULL
     for (i in seq_along(unique)) {
@@ -1052,7 +1053,7 @@ ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/UniqueClonotypes_Pseudotime1.
 clonalHomeostasis(df, cloneCall = "gene+nt")
 ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Clonal_homeostasis_Pseudotime1.pdf", height=2, width=5)
 
-clonalProportion(df, cloneCall = "gene+nt")
+clonalProportion(df, cloneCall = "gene+nt", split = c(5, 20, 100, 1000, 10000, 30000))
 ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Clonal_proportion_Pseudotime1.pdf", height=2, width=5)
 
 unique <- stringr::str_sort(as.character(unique(meta[,"PT2"])), numeric = TRUE)
@@ -1069,7 +1070,7 @@ ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/UniqueClonotypes_Pseudotime2.
 clonalHomeostasis(df, cloneCall = "gene+nt")
 ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Clonal_homeostasis_Pseudotime2.pdf", height=2, width=5)
 
-clonalProportion(df, cloneCall = "gene+nt")
+clonalProportion(df, cloneCall = "gene+nt", split = c(5, 20, 100, 1000, 10000, 30000))
 ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Clonal_proportion_Pseudotime2.pdf", height=2, width=5)
 
 
@@ -1087,8 +1088,43 @@ ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/UniqueClonotypes_Pseudotime3.
 clonalHomeostasis(df, cloneCall = "gene+nt")
 ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Clonal_homeostasis_Pseudotime3.pdf", height=2, width=5)
 
-clonalProportion(df, cloneCall = "gene+nt")
+clonalProportion(df, cloneCall = "gene+nt", split = c(5, 20, 100, 1000, 10000, 30000))
 ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Clonal_proportion_Pseudotime3.pdf", height=2, width=5)
+
+
+unique <- stringr::str_sort(as.character(unique(meta[,"PT4"])), numeric = TRUE)
+    df <- NULL
+    for (i in seq_along(unique)) {
+        subset <- subset(meta, meta[,"PT4"] == unique[i])
+        df[[i]] <- subset
+    }
+    names(df) <- unique
+    
+quantContig(df, cloneCall="gene+nt", scale = T) + guides(fill = F)
+ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/UniqueClonotypes_Pseudotime4.pdf", height=2, width=2.5)
+
+clonalHomeostasis(df, cloneCall = "gene+nt")
+ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Clonal_homeostasis_Pseudotime4.pdf", height=2, width=5)
+
+clonalProportion(df, cloneCall = "gene+nt", split = c(5, 20, 100, 1000, 10000, 30000))
+ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Clonal_proportion_Pseudotime4.pdf", height=2, width=5)
+
+unique <- stringr::str_sort(as.character(unique(meta[,"PT5"])), numeric = TRUE)
+    df <- NULL
+    for (i in seq_along(unique)) {
+        subset <- subset(meta, meta[,"PT5"] == unique[i])
+        df[[i]] <- subset
+    }
+    names(df) <- unique
+    
+quantContig(df, cloneCall="gene+nt", scale = T) + guides(fill = F)
+ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/UniqueClonotypes_Pseudotime5.pdf", height=2, width=2.5)
+
+clonalHomeostasis(df, cloneCall = "gene+nt")
+ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Clonal_homeostasis_Pseudotime5.pdf", height=2, width=5)
+
+clonalProportion(df, cloneCall = "gene+nt", split = c(5, 20, 100, 1000, 10000, 30000))
+ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Clonal_proportion_Pseudotime5.pdf", height=2, width=5)
 ```
 
 ```{r}
