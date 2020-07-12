@@ -635,6 +635,7 @@ saveRDS(Macro, file = "./data/Processed/Macrophage_FullCluster.rds")
 
 
 ```{r}
+Macro <- readRDS("./data/Processed/Macrophage_FullCluster.rds")
 dir.create("DataAnalysis/CellType/APC/Macrophage")
 colors <- scales::hue_pal()(20)
 colors <- colors[c(1,4,8,14,15)]
@@ -687,7 +688,7 @@ select <- c("FCGR1A", "CD68", "CD36", "TFRC", "CD20", "MRC1", "ANPEP", "MSR1", "
 filter <- All.markers[All.markers$gene %in% select,]
 top <- filter %>% group_by(cluster) %>% top_n(n = 10, wt = avg_logFC)
 top <- rbind.data.frame(top,top10)
-top <- top
+top <- top %>% group_by(cluster) %>% top_n(n = 11, wt =  0.5*avg_logFC + 12*(pct.1-pct.2))
 
 
 
@@ -695,6 +696,97 @@ DotPlot(Macro, features = unique(top$gene)) + coord_flip() +
     scale_color_gradientn(colors = rev(colorblind_vector(11))) + 
     guides(color = F, size = F) +
     scale_size(range = c(0.5,3.5))
+ggsave(path = "DataAnalysis/CellType/APC/Macrophage/markers", file = "Selected_dotplot.eps", height=7.5, width=2.5)
+```
+
+
+
+```{r}
+dir.create("./DataAnalysis/CellType/APC/Macrophage/GSEA")
+#library(escape)
+GS <- getGeneSets(library = c("H"))
+ES <- enrichIt(obj = Macro, gene.sets = GS, groups = 1000, cores = 4)
+save(ES, file = "./DataAnalysis/CellType/APC/Macrophage/GSEA/H_enrichment.rda")
+```
+
+
+```{r}
+load("./DataAnalysis/CellType/APC/GSEA/H_enrichment.rda")
+meta <- APC[[]]
+meta <- merge(meta, ES, by = "row.names")
+names <- colnames(ES)
+type_sig <- getSignificance(meta[,c("type",names)], group = "type")
+cluster_sig <- getSignificance(meta[,c("newCluster",names)], group = "newCluster")
+
+write.table(type_sig , file = "DataAnalysis/CellType/APC/GSEA/lmfit_byType.txt", col.names=NA, sep="\t",append=F)
+write.table(cluster_sig, file = "DataAnalysis/CellType/APC/GSEA/lmfit_byCluster.txt", col.names=NA, sep="\t",append=F)
+```
+
+
+```{r}
+top10 <- cluster_sig %>% top_n(10, wt=F)
+top10 <- rownames(top10)
+
+for (i in seq_along(top10)){
+  ridgeEnrichment(meta, gene.set = top10[i], group = "newCluster", add.rug = TRUE) + facet_grid(.~type)
+  ggsave(path = "DataAnalysis/CellType/APC/GSEA/", file = paste0("Ridge_ClusterTop10_TypevsCluster_", top10[i], ".pdf"), height=3, width=5)
+}
+
+for (i in seq_along(top10)){
+  ridgeEnrichment(meta, gene.set = top10[i], group = "newCluster", add.rug = TRUE) 
+  ggsave(path = "DataAnalysis/CellType/APC/GSEA/", file = paste0("Ridge_ClusterTop10_Cluster_", top10[i], ".pdf"), height=3, width=5)
+}
+
+
+top10 <- type_sig %>% top_n(10, wt=F)
+top10 <- rownames(top10)
+for (i in seq_along(top10)){
+  ridgeEnrichment(meta, gene.set = top10[i], group = "type", add.rug = TRUE)
+  ggsave(path = "DataAnalysis/CellType/APC/GSEA/", file = paste0("Ridge_ClusterTop10_Type_", top10[i], ".pdf"), height=3, width=5)
+}
+
+
+```
+
+```{r}
+sign <- read.delim("./data/immune_sign.txt")[,c(1:20, 63:69)]
+full<- as.list(sign)
+```
+
+```{r}
+
+
+unique <- names(full) 
+list <- list()
+for (i in seq_along(unique)) {
+    tmp <- full[[i]]
+    tmp <- tmp[tmp != ""]
+    tmp <- unique(toupper(tmp))
+    tmp <- GSEABase::GeneSet(tmp, setName=paste(unique[i]))
+    list[[i]] <- tmp
+    
+}
+
+list <- GSEABase::GeneSetCollection(list)
+```
+
+
+```{r}
+ES2 <- enrichIt(obj = APC, gene.sets = list, groups = 1000, cores = 4)
+save(ES2, file = "./DataAnalysis/CellType/APC/GSEA/Requested_enrichment.rda")
+```
+
+```{r}
+APC <- AddMetaData(APC, ES2)
+```
+
+```{r}
+for (i in seq_along(unique)) {
+  plot <- FeaturePlot(APC, features = unique[i]) + 
+  scale_color_gradientn(colors = rev(colorblind_vector(11)))
+  plot <- plot + NoLegend()
+  ggsave(path = "./DataAnalysis/CellType/APC/GSEA", filename=paste0(unique[i], ".eps"), plot, width=3.5, height=3)
+}
 ```
 
 
@@ -836,90 +928,4 @@ APC <- readRDS("./data/Processed/APC_FullCluster.rds")
 
 #ssGSEA
 
-```{r}
-dir.create("./DataAnalysis/CellType/APC/GSEA")
-#library(escape)
-GS <- getGeneSets(library = c("H", "C5"))
-ES <- enrichIt(obj = APC, gene.sets = GS, groups = 1000, cores = 4)
-save(ES, file = "./DataAnalysis/CellType/APC/GSEA/H_C5_enrichment.rda")
-```
 
-
-```{r}
-load("./DataAnalysis/CellType/APC/GSEA/H_enrichment.rda")
-meta <- APC[[]]
-meta <- merge(meta, ES, by = "row.names")
-names <- colnames(ES)
-type_sig <- getSignificance(meta[,c("type",names)], group = "type")
-cluster_sig <- getSignificance(meta[,c("newCluster",names)], group = "newCluster")
-
-write.table(type_sig , file = "DataAnalysis/CellType/APC/GSEA/lmfit_byType.txt", col.names=NA, sep="\t",append=F)
-write.table(cluster_sig, file = "DataAnalysis/CellType/APC/GSEA/lmfit_byCluster.txt", col.names=NA, sep="\t",append=F)
-```
-
-
-```{r}
-top10 <- cluster_sig %>% top_n(10, wt=F)
-top10 <- rownames(top10)
-
-for (i in seq_along(top10)){
-  ridgeEnrichment(meta, gene.set = top10[i], group = "newCluster", add.rug = TRUE) + facet_grid(.~type)
-  ggsave(path = "DataAnalysis/CellType/APC/GSEA/", file = paste0("Ridge_ClusterTop10_TypevsCluster_", top10[i], ".pdf"), height=3, width=5)
-}
-
-for (i in seq_along(top10)){
-  ridgeEnrichment(meta, gene.set = top10[i], group = "newCluster", add.rug = TRUE) 
-  ggsave(path = "DataAnalysis/CellType/APC/GSEA/", file = paste0("Ridge_ClusterTop10_Cluster_", top10[i], ".pdf"), height=3, width=5)
-}
-
-
-top10 <- type_sig %>% top_n(10, wt=F)
-top10 <- rownames(top10)
-for (i in seq_along(top10)){
-  ridgeEnrichment(meta, gene.set = top10[i], group = "type", add.rug = TRUE)
-  ggsave(path = "DataAnalysis/CellType/APC/GSEA/", file = paste0("Ridge_ClusterTop10_Type_", top10[i], ".pdf"), height=3, width=5)
-}
-
-
-```
-
-```{r}
-sign <- read.delim("./data/immune_sign.txt")[,c(1:20, 63:69)]
-full<- as.list(sign)
-```
-
-```{r}
-
-
-unique <- names(full) 
-list <- list()
-for (i in seq_along(unique)) {
-    tmp <- full[[i]]
-    tmp <- tmp[tmp != ""]
-    tmp <- unique(toupper(tmp))
-    tmp <- GSEABase::GeneSet(tmp, setName=paste(unique[i]))
-    list[[i]] <- tmp
-    
-}
-
-list <- GSEABase::GeneSetCollection(list)
-```
-
-
-```{r}
-ES2 <- enrichIt(obj = APC, gene.sets = list, groups = 1000, cores = 4)
-save(ES2, file = "./DataAnalysis/CellType/APC/GSEA/Requested_enrichment.rda")
-```
-
-```{r}
-APC <- AddMetaData(APC, ES2)
-```
-
-```{r}
-for (i in seq_along(unique)) {
-  plot <- FeaturePlot(APC, features = unique[i]) + 
-  scale_color_gradientn(colors = rev(colorblind_vector(11)))
-  plot <- plot + NoLegend()
-  ggsave(path = "./DataAnalysis/CellType/APC/GSEA", filename=paste0(unique[i], ".eps"), plot, width=3.5, height=3)
-}
-```
