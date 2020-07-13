@@ -23,8 +23,7 @@ library(BiocStyle)
 In general I like to load libraries here that we will use universally, and then call other libraries when we need them in the code chunks that are relevant. 
 
 ```{r}
-suppressPackageStartupMessages(library(Seurat))
-suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(caret))
 suppressPackageStartupMessages(library(dplyr))
 ```
 
@@ -103,24 +102,28 @@ survival <- c("OS", "DSS", "DFI", "PFI")
 
 
 ```{r}
-library(caret)
+
 for (i in seq_along(survival)) {
     partition <- caret::createDataPartition(data[,survival[i]], p=0.7, list=F)
     train <- data[partition,]
     test <- data[-partition,]
-    control <- caret::trainControl(method="repeatedcv", number=10, repeats=128, selectionFunction = "best", savePredictions = T, classProbs = TRUE, summaryFunction = twoClassSummary)
     #Loop for all the gene lists
     for (j in seq_along(gene_list)) {
-        genes <- gene_list[[j]][[1]]
+        genes <- gene_list[[j]][[2]]
         tmp <- train[,colnames(train) %in% c(survival[i], genes)]
         tmp[] <- lapply(tmp[], function(x) as.numeric(as.character(x)))
         #Fine-tuning parameters for rfeControl - feature selection
-        rctrl1 <- rfeControl(returnResamp = "all", functions = caretFuncs, saveDetails = TRUE, method="repeatedcv", number=10, repeats=128)
+        rctrl1 <- rfeControl(returnResamp = "all", functions = caretFuncs, saveDetails = TRUE, method="repeatedcv", number=10, repeats=5)
+        length = ncol(tmp)-1
+      
+        rf_grid <-  expand.grid(mtry = c(floor(sqrt(ncol(tmp)) / 10),
+                        floor(sqrt(ncol(tmp)) / 5),
+                        floor(sqrt(ncol(tmp)))))
         #Creating the model
-        model <- rfe(as.factor(tmp$OS) ~ ., data = as.matrix(tmp),
+        model <- rfe(as.factor(tmp$OS) ~ ., data = as.matrix(tmp[,1:length]),
              sizes = c(1, 5, 10, 15, 20),
              method='rf', 
-            preProcess = c("scale", "center"),
+             preProcess = c("scale", "center"),
              rfeControl = rctrl1)
         
         
@@ -128,10 +131,13 @@ for (i in seq_along(survival)) {
         
     }
 }
+
 ```
 
 ```{r}
-dfTPM <- dfTPM[, colnames(dfTPM) %in% genes]
+library(skimr)
+skimmed <- skim_to_wide(trainData)
+skimmed[, c(1:5, 9:11, 13, 15:16)]
 ```
 
 ```{r}
