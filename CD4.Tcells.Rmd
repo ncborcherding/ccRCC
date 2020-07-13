@@ -1,5 +1,5 @@
 ---
-title: Integration of multiple experiments for the ccRCC project
+title: Analysis of CD4+ T cells in ccRCC
 author: 
 - name: Nick Borcherding
   email: ncborch@gmail.com

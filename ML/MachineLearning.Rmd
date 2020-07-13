@@ -1,0 +1,34 @@
+---
+title: Integration of multiple experiments for the ccRCC project
+author: 
+- name: Nick Borcherding
+  email: ncborch@gmail.com
+  affiliation: Washington University in St. Louis, School of Medicine, St. Louis, MO, USA
+date: "July 13, 2020"
+output:
+  BiocStyle::html_document:
+    toc_float: true
+---
+
+```{r, echo=FALSE, results="hide", message=FALSE}
+knitr::opts_chunk$set(error=FALSE, message=FALSE, warning=FALSE)
+library(BiocStyle)
+```
+
+
+# Preperation
+
+## Loading Libaries
+
+In general I like to load libraries here that we will use universally, and then call other libraries when we need them in the code chunks that are relevant. 
+
+```{r}
+suppressPackageStartupMessages(library(Seurat))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(dplyr))
+```
+
+```{r}
+CD8.Tcells <- read.delim
+```
+
