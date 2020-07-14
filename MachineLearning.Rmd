@@ -99,12 +99,19 @@ data <- merge(data, clinical, by.x = "row.names", by.y = "bcr_patient_barcode")
 survival <- c("OS", "DSS", "DFI", "PFI")
 ```
 
+```{r}
+dir.create("./ML/models")
+```
 
 
 ```{r}
+set.seed(123)
+out <- NULL
+library(doParallel)
+registerDoParallel(cores=4)
 
 for (i in seq_along(survival)) {
-    partition <- caret::createDataPartition(data[,survival[i]], p=0.7, list=F)
+    partition <- caret::createDataPartition(data[,survival[i]], p=0.5, list=F)
     train <- data[partition,]
     test <- data[-partition,]
     #Loop for all the gene lists
@@ -113,25 +120,53 @@ for (i in seq_along(survival)) {
         tmp <- train[,colnames(train) %in% c(survival[i], genes)]
         tmp[] <- lapply(tmp[], function(x) as.numeric(as.character(x)))
         #Fine-tuning parameters for rfeControl - feature selection
-        rctrl1 <- rfeControl(returnResamp = "all", functions = caretFuncs, saveDetails = TRUE, method="repeatedcv", number=10, repeats=5)
+        rctrl1 <- rfeControl(returnResamp = "all", functions = caretFuncs, saveDetails = TRUE, method="repeatedcv", number=10, repeats=16)
         length = ncol(tmp)-1
       
         rf_grid <-  expand.grid(mtry = c(floor(sqrt(ncol(tmp)) / 10),
                         floor(sqrt(ncol(tmp)) / 5),
                         floor(sqrt(ncol(tmp)))))
         #Creating the model
-        model <- rfe(as.factor(tmp$OS) ~ ., data = as.matrix(tmp[,1:length]),
+        model <- rfe(as.factor(tmp[,survival[i]]) ~ ., data = as.matrix(tmp[,1:length]),
              sizes = c(1, 5, 10, 15, 20),
              method='rf', 
              preProcess = c("scale", "center"),
              rfeControl = rctrl1)
+      model_importance <- varImp(model)
+      model_importance$names <- rownames(model_importance)
+      model_importance <- model_importance[1:model$bestSubset,]
+      
+    
+      plot <- ggplot(model_importance, aes(x=reorder(names, Overall), y=Overall)) +
+        geom_bar(stat="identity") +
+        coord_flip() + 
+        theme_classic()
+      ggsave(path = "./ML/models/", filename=paste(names(gene_list)[i], "_VarImp.pdf", sep=""), plot, height=3, width=3)
         
-        
-        
-        
+          
+      eval <- test[,colnames(test) %in% c(survival[i], genes)]
+      eval[] <- lapply(eval[], function(x) as.numeric(as.character(x)))
+      predictions <- predict(model, newdata = as.matrix(eval[,1:length]))
+      
+      results <- data.frame(actual = eval[,survival[i]], predict = predictions)
+      results <- results %>%
+        mutate(correct = ifelse(actual == predict, TRUE, FALSE))
+      plot <- ggplot(results, aes(x = predict, fill = correct)) +
+            geom_bar(position = "fill") + 
+            theme_classic()
+      ggsave(paste("./ML/models/", names(gene_list)[i], ".pdf", sep=""), plot, height=3, width=3)
+      
+       y <- confusionMatrix(predict(model, newdata = as.matrix(eval[,1:length])), reference = as.factor(eval[,survival[i]]))
+      row <- unlist(c(y$overall[c(1:4,6)], y$table[1], y$table[2], y$table[3], y$table[4], y$byClass[1:4], names(gene_list[j]), survival[i]))
+    out <- rbind(out,row) 
+    save(model, file = paste0(survival[i], "_", names(gene_list[j]), ".rda"))
     }
+   
 }
+colnames(out) <- c("Accuracy", "Kappa", "Accur_low", "Accur_high", "Pvalue", "TP", "FN", "FP", "TN", "Sensitivity", "Specificity", "PPV", "NPV", "Celltype", "GeneSize")
+write.table(mat, file="./ML/models/model_summaries.txt", sep="\t",append=F, row.names = F)
 
+stopImplicitCluster()
 ```
 
 ```{r}

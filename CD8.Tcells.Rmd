@@ -966,8 +966,39 @@ ggsave(path = "DataAnalysis/CellType/CD8.Tcells/clonotype", filename="Integrated
 ```{r}
 TumorOnly <- subset(Tcells, orig.ident == "P1" | orig.ident ==  "P2" | orig.ident ==  "P3")
 CD8 <- expression2List(Tcells, group = "cluster")
-TumorOnly  <- expression2List(TumorOnly,  group = "cluster")
+
+
+P1 <- subset(Tcells, orig.ident == "P1")
+P1 <- expression2List(P1,  group = "cluster")
+
+P2 <- subset(Tcells, orig.ident == "P2")
+P2 <- expression2List(P2,  group = "cluster")
+
+P3 <- subset(Tcells, orig.ident == "P3")
+P3 <- expression2List(P3,  group = "cluster")
+
+clonalProportion(P1, cloneCall = "gene+nt")
+ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Clonal_proportion_P1.pdf", height=2, width=5)
+
+clonalProportion(P2, cloneCall = "gene+nt")
+ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Clonal_proportion_P2.pdf", height=2, width=5)
+
+clonalProportion(P3, cloneCall = "gene+nt")
+ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Clonal_proportion_P3.pdf", height=2, width=5)
+
+compareClonotypes(P1, numbers = 15, 
+                    cloneCall="gene+nt", graph = "alluvial")
+ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Alluvial_compare_P1.pdf", height=4, width=20)
+
+compareClonotypes(P2, numbers = 15, 
+                    cloneCall="gene+nt", graph = "alluvial")
+ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Alluvial_compare_P2.pdf", height=4, width=20)
+
+compareClonotypes(P3, numbers = 15, 
+                    cloneCall="gene+nt", graph = "alluvial")
+ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Alluvial_compare_P3.pdf", height=4, width=20)
 ```
+
 
 ```{r}
 quantContig(CD8, cloneCall="gene+nt", scale = TRUE) + guides(fill = F)
@@ -1375,5 +1406,14 @@ nr5 <- ggplot(meta, aes(PseudoT5, y=CD8_B)) + geom_smooth(method = "loess", se=F
 
 nr4/nr3/nr1/nr2/nr5
 ggsave("./DataAnalysis/CellType/CD8.Tcells/GSEA/nonresponders.pdf", height=4,width=5)
+```
+
+***
+
+```{r}
+Tcells <- NormalizeData(Tcells)
+markers <- FindAllMarkers(Tcells, logfc = 0.0, min.pct = 0, pseudocount.use = 0.1, only.pos = TRUE)
+write.table(markers, file="./DataAnalysis/CellType/CD8.Tcells/FindAllMarkers.txt",
+                sep="\t",append=F, row.names = FALSE)
 ```
 
