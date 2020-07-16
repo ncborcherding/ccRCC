@@ -655,10 +655,13 @@ ggsave(path = "DataAnalysis/CellType/CD4.Tcells/clonotype", filename="Integrated
 ```
 
 
+
+
 ```{r}
 TumorOnly <- subset(Tcells, orig.ident == "P1" | orig.ident ==  "P2" | orig.ident ==  "P3")
 CD4 <- expression2List(Tcells, group = "cluster")
 TumorOnly  <- expression2List(TumorOnly,  group = "cluster")
+Run  <- expression2List(TumorOnly,  group = "Run")
 ```
 
 ```{r}
@@ -724,6 +727,32 @@ alluvialClonotypes(TumorOnly, cloneCall = "gene",
                    y.axes = c("Frequency", "type", "newCluster"), 
                    color = "newCluster") 
 ggsave("DataAnalysis/CellType/CD4.Tcells/clonotype/Clonal_Alluvial_TumorOnly.pdf", height=3, width=5)
+```
+
+
+```{r}
+quantContig(Run, cloneCall = "gene+nt", scale = T)
+ggsave("DataAnalysis/CellType/CD4.Tcells/clonotype/PtUnique_TumorOnly.pdf", height=3, width=5)
+
+clonalProportion(Run, cloneCall = "gene+nt")
+
+CD4_overlap <- clonalOverlap(Run, cloneCall = "gene+nt", exportTable = T)
+
+ggsave("DataAnalysis/CellType/CD4.Tcells/clonotype/PtProportion_TumorOnly.pdf", height=3, width=5)
+
+compareClonotypes(Run, samples = c("P1_P", "P1_T"), numbers = 10)
+ggsave("DataAnalysis/CellType/CD4.Tcells/clonotype/Pt1_alluvialCompare_TumorOnly.pdf", height=3, width=20)
+
+compareClonotypes(Run, samples = c("P2_P", "P2_T"), numbers = 10)
+ggsave("DataAnalysis/CellType/CD4.Tcells/clonotype/Pt2_alluvialCompare_TumorOnly.pdf", height=3, width=20)
+
+compareClonotypes(Run, samples = c("P3_P", "P3_T"), numbers = 10)
+ggsave("DataAnalysis/CellType/CD4.Tcells/clonotype/Pt3_alluvialCompare_TumorOnly.pdf", height=3, width=20)
+
+clonalOverlap(Run, cloneCall = "gene+nt") + 
+    scale_fill_gradientn(colors = rev(colorblind_vector(11)), na.value = "white", limits = c(0,0.15))
+ggsave("DataAnalysis/CellType/CD4.Tcells/clonotype/PT_OVERLAP.pdf", height=4, width = 5)
+
 ```
 
 ***

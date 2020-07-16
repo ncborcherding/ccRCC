@@ -966,7 +966,9 @@ ggsave(path = "DataAnalysis/CellType/CD8.Tcells/clonotype", filename="Integrated
 ```{r}
 TumorOnly <- subset(Tcells, orig.ident == "P1" | orig.ident ==  "P2" | orig.ident ==  "P3")
 CD8 <- expression2List(Tcells, group = "cluster")
-
+Run  <- expression2List(TumorOnly,  group = "Run")
+integrated  <- expression2List(TumorOnly,  group = "Final_clusters")
+TumorOnly  <- expression2List(TumorOnly,  group = "cluster")
 
 P1 <- subset(Tcells, orig.ident == "P1")
 P1 <- expression2List(P1,  group = "cluster")
@@ -1037,10 +1039,12 @@ ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Clonal_homeostasis_TumorOnly.
 clonalProportion(TumorOnly, cloneCall = "gene+nt")
 ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Clonal_proportion_TumorOnly.pdf", height=2, width=5)
 
-clonalOverlap(TumorOnly, cloneCall = "gene+nt", method = "morisita")
+clonalOverlap(TumorOnly, cloneCall = "gene+nt", method = "morisita") + 
+    scale_fill_gradientn(colors = rev(colorblind_vector(11)), na.value = "white")
 ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Clonal_overlap_morisita_TumorOnly.pdf", height=4, width=5)
 
-clonalOverlap(TumorOnly, cloneCall = "gene+nt", method = "overlap")
+clonalOverlap(TumorOnly, cloneCall = "gene+nt", method = "overlap") + 
+    scale_fill_gradientn(colors = rev(colorblind_vector(11)), na.value = "white")
 ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Clonal_overlap_overlap_TumorOnly.pdf", height=4, width=5)
 ```
 
@@ -1063,6 +1067,14 @@ alluvialClonotypes(TumorOnly, cloneCall = "gene",
                    y.axes = c("Frequency", "type", "newCluster"), 
                    color = "newCluster") 
 ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Clonal_Alluvial_TumorOnly.pdf", height=3, width=5)
+```
+
+
+```{r}
+alluvialClonotypes(TumorOnly, cloneCall = "gene+nt", 
+                   y.axes = c("Frequency", "type", "Final_clusters", "sample"), 
+                   color = c("TRAV12-2.TRAJ42.TRAC_TGTGCCGTGAACGGGGGAAGCCAAGGAAATCTCATCTTT_TRBV20-1.TRBJ2-3.TRBD2.TRBC2_TGCAGTGCTGAGCGGGAAGACACAGATACGCAGTATTTT", "NA_NA_TRBV24-1.TRBJ1-4.TRBD1.TRBC1_TGTGCCACCAGTGCGACCCTCAGGGTGGTGGCAGAAAAACTGTTTTTT")) 
+ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/TumorOnly_Clonal_Alluvial_highlight.pdf", height=3, width=5)
 ```
 
 Pseudotime Assignments
@@ -1170,8 +1182,61 @@ alluvialClonotypes(Tcells, cloneCall = "gene",
 ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Clonal_Alluvial_AllPseudotime_byRun.pdf", height=3, width=7)
 ```
 
+```{r}
+quantContig(Run, cloneCall = "gene+nt", scale = T)
+ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/PtUnique_TumorOnly.pdf", height=3, width=5)
+
+clonalProportion(Run, cloneCall = "gene+nt")
+
+ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/PtProportion_TumorOnly.pdf", height=3, width=5)
+
+compareClonotypes(Run, samples = c("P1_P", "P1_T"), numbers = 10)
+ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Pt1_alluvialCompare_TumorOnly.pdf", height=3, width=20)
+
+compareClonotypes(Run, samples = c("P2_P", "P2_T"), numbers = 10)
+ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Pt2_alluvialCompare_TumorOnly.pdf", height=3, width=20)
+
+compareClonotypes(Run, samples = c("P3_P", "P3_T"), numbers = 10)
+ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/Pt3_alluvialCompare_TumorOnly.pdf", height=3, width=20)
+
+clonalOverlap(Run, cloneCall = "gene+nt") + 
+    scale_fill_gradientn(colors = rev(colorblind_vector(11)), na.value = "white")
+ggsave("DataAnalysis/CellType/CD8.Tcells/clonotype/PT_OVERLAP.pdf", height=4, width = 5)
+```
+
+```{r}
+clonalOverlap <- function(df, cloneCall = c("gene", "nt", "aa", "gene+nt"), 
+                                method = c("overlap", "morisita"), 
+                                exportTable = FALSE){
+    cloneCall <- theCall(cloneCall)
+    df <- df[order(names(df))]
+    values <- str_sort(as.character(unique(names(df))), numeric = TRUE)
+    df <- df[quiet(dput(values))]
+    num_samples <- length(df[])
+    names_samples <- names(df)
+    coef_matrix <- data.frame(matrix(NA, num_samples, num_samples))
+    colnames(coef_matrix) <- names_samples
+    rownames(coef_matrix) <- names_samples
+    length <- seq_len(num_samples)
+    if (method == "overlap") {
+        coef_matrix <- overlapIndex(df, length, cloneCall, coef_matrix)
+    } else if (method == "morisita") {
+        coef_matrix <- morisitaIndex(df, length, cloneCall, coef_matrix)}
+    coef_matrix$names <- rownames(coef_matrix)
+    if (exportTable == TRUE) { return(coef_matrix) }
+    coef_matrix <- suppressMessages(melt(coef_matrix))[,-1]
+    col <- colorblind_vector(7)
+    coef_matrix$variable <- factor(coef_matrix$variable, levels = values)
+    coef_matrix$names <- factor(coef_matrix$names, levels = values)
+    plot <- ggplot(coef_matrix, aes(x=names, y=variable, fill=value)) +
+            geom_tile() + labs(fill = method) +
+            geom_text(aes(label = round(value, digits = 3))) +
+            scale_fill_gradientn(colors = colorblind_vector(11), na.value = "white") +
+            theme_classic() + theme(axis.title = element_blank())
+}
 
 
+```
 
 
 ***
