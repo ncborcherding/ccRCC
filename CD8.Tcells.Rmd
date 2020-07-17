@@ -160,6 +160,16 @@ ggsave(path = "./DataAnalysis/CellType/CD8.Tcells", filename="IntegratedObject_b
 ```{r}
 freq_table <- table(Tcells@active.ident, Tcells$type)
 
+ggplot(as.data.frame(freq_table), aes(x=as.factor(Var1), y=Freq, fill=Var2)) + 
+  geom_bar(stat="identity", position="fill", color="black", lwd=0.25) + 
+  theme(axis.title.x = element_blank()) + 
+   scale_fill_manual(values=rev(colorblind_vector(3))) + 
+  theme_classic() + 
+    xlab("Clusters") + 
+    coord_flip() 
+ggsave(path = "DataAnalysis/CellType/CD8.Tcells/", file = "relativeContribution_byClusterType_unscaled.pdf", height=5, width=5)
+
+
 tTotal <- 12239
 pTotal <- 21160
 kTotal <- 1778
@@ -312,7 +322,15 @@ DotPlot(Tcells, features = unique(top5$gene)) + coord_flip() +
     scale_size(range = c(0.5,3.5))
 ggsave(path = "DataAnalysis/CellType/CD8.Tcells/markers", file = "Top5_dotplot.eps", height=6, width=3.5)
 ```
+```{r}
+table <- table(Tcells$newCluster, Tcells$orig.ident)
 
+for (i in 1:nrow(table)) {
+    table[i,] <- table[i,]/sum(table[i,])
+}
+
+table
+```
 
 ```{r}
 genes <- c("CCR7", "LEF1", "SELL", "TCF7", "CD27", "CD28", "CD40LG", "CD44", "CD69", "IL2RA", "TFRC","TNFRSF4", "TNFRSF8", "CCL3", "CCL4","GZMA", "GZMB", "GZMK", "IFNG","NKG7", "PRF1", "CTLA4", "HAVCR2", "LAG3", "PDCD1", "TIGIT")
@@ -498,6 +516,9 @@ ggplot(tmp, aes(x=avg_logFC, y=-log10(p_val_adj))) +
 ggsave(path = "DataAnalysis/CellType/CD8.Tcells/DGE/visualizations", file = paste0("VolcanoPlot_", names(marker_list[i]), ".pdf"), height = 2.5, width=2.5)
 }
 ```
+
+
+
 
 ***
 
