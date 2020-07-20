@@ -1,0 +1,314 @@
+---
+title: Integration of multiple experiments for the ccRCC project
+author: 
+- name: Nick Borcherding
+  email: ncborch@gmail.com
+  affiliation: Washington University in St. Louis, School of Medicine, St. Louis, MO, USA
+date: "July 13, 2020"
+output:
+  BiocStyle::html_document:
+    toc_float: true
+---
+
+```{r, echo=FALSE, results="hide", message=FALSE}
+knitr::opts_chunk$set(error=FALSE, message=FALSE, warning=FALSE)
+library(BiocStyle)
+```
+
+
+# Preperation
+
+## Loading Libaries
+
+In general I like to load libraries here that we will use universally, and then call other libraries when we need them in the code chunks that are relevant. 
+
+```{r}
+suppressPackageStartupMessages(library(dplyr))
+```
+
+
+TCGA data
+
+```{r}
+updated_survival <- read.delim("./ML/updated_survival.txt")
+APC <- read.csv("./data/knn_KIRC_APC_7.15genestable.csv")
+APC <- APC[-1,]
+TC <- read.csv("./data/knn_KIRC_CD8.Tcells_6.15genestable.csv")
+TC <- TC[-1,]
+```
+
+
+
+Clinical Information
+```{r}
+samples <- APC$rnaseq_patients
+
+updated_survival <- updated_survival[updated_survival$bcr_patient_barcode %in% samples,]
+```
+
+
+```{r}
+clinical <- updated_survival[,c("bcr_patient_barcode", "ajcc_pathologic_tumor_stage", "histological_grade", "treatment_outcome_first_course")]
+
+data <- merge(APC, clinical, by.x = "rnaseq_patients", by.y = "bcr_patient_barcode")
+data$ajcc_pathologic_tumor_stage <- ifelse(data$ajcc_pathologic_tumor_stage == "[Discrepancy]", NA, data$ajcc_pathologic_tumor_stage)
+data$histological_grade <- ifelse(data$histological_grade == "GX" | data$histological_grade == "[Not Available]", NA, data$histological_grade)
+```
+
+
+```{r}
+ggplot(subset(data, !is.na(ajcc_pathologic_tumor_stage)), aes(x=ajcc_pathologic_tumor_stage, group=knn.pred, fill = knn.pred)) + 
+    geom_bar(position = "fill") + 
+    theme_classic()
+ggsave("APCmodel_byStage.pdf", height=3, width=4)
+
+ggplot(subset(data, !is.na(histological_grade)), aes(x=histological_grade, group=knn.pred, fill = knn.pred)) + 
+    geom_bar(position = "fill") + 
+    theme_classic()
+ggsave("APCmodel_byGrade.pdf", height=3, width=4)
+```
+
+```{r}
+table <- table(data$histological_grade, data$knn.pred)
+
+A <- sum(table[,1]) #Sum of Healthy Cells
+D <- sum(table[,2]) #Sum of Sick Cells
+
+out <- NULL
+mat <- NULL
+for (i in 1:nrow(table)) {
+x <- c(A, D, table[i,1], table[i,2])
+dim(x) <- c(2,2)
+
+test <- prop.test(x[,2], n=x[,1], p = NULL, correct = FALSE)
+
+out <- c(test$p.value, test$estimate[1], test$estimate[2], test$conf.int[1], test$conf.int[2])
+mat <- rbind(mat, out)
+}
+mat <- as.data.frame(mat)
+colnames(mat) <- c("Pvalue", "Prop_Con", "Prop_MyoC", "OR_low", "OR_high")
+mat$FDR <- p.adjust(mat$Pvalue) #Need to correct for multiple comparisons
+mat$clusters <- rownames(table)
+write.table(mat, file = "APC_ProportionTest_grade.txt", col.names=NA, sep="\t",append=F)
+
+table <- table(data$ajcc_pathologic_tumor_stage, data$knn.pred)
+
+A <- sum(table[,1]) #Sum of Healthy Cells
+D <- sum(table[,2]) #Sum of Sick Cells
+
+out <- NULL
+mat <- NULL
+for (i in 1:nrow(table)) {
+x <- c(A, D, table[i,1], table[i,2])
+dim(x) <- c(2,2)
+
+test <- prop.test(x[,2], n=x[,1], p = NULL, correct = FALSE)
+
+out <- c(test$p.value, test$estimate[1], test$estimate[2], test$conf.int[1], test$conf.int[2])
+mat <- rbind(mat, out)
+}
+mat <- as.data.frame(mat)
+colnames(mat) <- c("Pvalue", "Prop_Con", "Prop_MyoC", "OR_low", "OR_high")
+mat$FDR <- p.adjust(mat$Pvalue) #Need to correct for multiple comparisons
+mat$clusters <- rownames(table)
+write.table(mat, file = "APC_ProportionTest_stage.txt", col.names=NA, sep="\t",append=F)
+```
+
+```{r}
+clinical <- updated_survival[,c("bcr_patient_barcode", "ajcc_pathologic_tumor_stage", "histological_grade", "treatment_outcome_first_course")]
+data <- merge(TC, clinical, by.x = "rnaseq_patients", by.y = "bcr_patient_barcode")
+data$ajcc_pathologic_tumor_stage <- ifelse(data$ajcc_pathologic_tumor_stage == "[Discrepancy]", NA, data$ajcc_pathologic_tumor_stage)
+data$histological_grade <- ifelse(data$histological_grade == "GX" | data$histological_grade == "[Not Available]", NA, data$histological_grade)
+```
+
+
+```{r}
+ggplot(subset(data, !is.na(ajcc_pathologic_tumor_stage)), aes(x=ajcc_pathologic_tumor_stage, group=knn.pred, fill = knn.pred)) + 
+    geom_bar(position = "fill") + 
+    theme_classic()
+ggsave("TCmodel_byStage.pdf", height=3, width=4)
+
+ggplot(subset(data, !is.na(histological_grade)), aes(x=histological_grade, group=knn.pred, fill = knn.pred)) + 
+    geom_bar(position = "fill") + 
+    theme_classic()
+ggsave("TCmodel_byGrade.pdf", height=3, width=4)
+
+```
+
+```{r}
+table <- table(data$histological_grade, data$knn.pred)
+
+A <- sum(table[,1]) #Sum of Healthy Cells
+D <- sum(table[,2]) #Sum of Sick Cells
+
+out <- NULL
+mat <- NULL
+for (i in 1:nrow(table)) {
+x <- c(A, D, table[i,1], table[i,2])
+dim(x) <- c(2,2)
+
+test <- prop.test(x[,2], n=x[,1], p = NULL, correct = FALSE)
+
+out <- c(test$p.value, test$estimate[1], test$estimate[2], test$conf.int[1], test$conf.int[2])
+mat <- rbind(mat, out)
+}
+mat <- as.data.frame(mat)
+colnames(mat) <- c("Pvalue", "Prop_Con", "Prop_MyoC", "OR_low", "OR_high")
+mat$FDR <- p.adjust(mat$Pvalue) #Need to correct for multiple comparisons
+mat$clusters <- rownames(table)
+write.table(mat, file = "TC_ProportionTest_grade.txt", col.names=NA, sep="\t",append=F)
+
+table <- table(data$ajcc_pathologic_tumor_stage, data$knn.pred)
+
+A <- sum(table[,1]) #Sum of Healthy Cells
+D <- sum(table[,2]) #Sum of Sick Cells
+
+out <- NULL
+mat <- NULL
+for (i in 1:nrow(table)) {
+x <- c(A, D, table[i,1], table[i,2])
+dim(x) <- c(2,2)
+
+test <- prop.test(x[,2], n=x[,1], p = NULL, correct = FALSE)
+
+out <- c(test$p.value, test$estimate[1], test$estimate[2], test$conf.int[1], test$conf.int[2])
+mat <- rbind(mat, out)
+}
+mat <- as.data.frame(mat)
+colnames(mat) <- c("Pvalue", "Prop_Con", "Prop_MyoC", "OR_low", "OR_high")
+mat$FDR <- p.adjust(mat$Pvalue) #Need to correct for multiple comparisons
+mat$clusters <- rownames(table)
+write.table(mat, file = "TC_ProportionTest_stage.txt", col.names=NA, sep="\t",append=F)
+```
+
+
+
+
+### Generating Models
+
+```{r}
+survival <- c("OS", "DSS", "DFI", "PFI")
+```
+
+```{r}
+dir.create("./ML/models")
+```
+
+
+```{r}
+set.seed(123)
+out <- NULL
+library(doParallel)
+registerDoParallel(cores=4)
+
+for (i in seq_along(survival)) {
+    partition <- caret::createDataPartition(data[,survival[i]], p=0.5, list=F)
+    train <- data[partition,]
+    test <- data[-partition,]
+    #Loop for all the gene lists
+    for (j in seq_along(gene_list)) {
+        genes <- gene_list[[j]][[2]]
+        tmp <- train[,colnames(train) %in% c(survival[i], genes)]
+        tmp[] <- lapply(tmp[], function(x) as.numeric(as.character(x)))
+        #Fine-tuning parameters for rfeControl - feature selection
+        rctrl1 <- rfeControl(returnResamp = "all", functions = caretFuncs, saveDetails = TRUE, method="repeatedcv", number=10, repeats=16)
+        length = ncol(tmp)-1
+      
+        rf_grid <-  expand.grid(mtry = c(floor(sqrt(ncol(tmp)) / 10),
+                        floor(sqrt(ncol(tmp)) / 5),
+                        floor(sqrt(ncol(tmp)))))
+        #Creating the model
+        model <- rfe(as.factor(tmp[,survival[i]]) ~ ., data = as.matrix(tmp[,1:length]),
+             sizes = c(1, 5, 10, 15, 20),
+             method='rf', 
+             preProcess = c("scale", "center"),
+             rfeControl = rctrl1)
+      model_importance <- varImp(model)
+      model_importance$names <- rownames(model_importance)
+      model_importance <- model_importance[1:model$bestSubset,]
+      
+    
+      plot <- ggplot(model_importance, aes(x=reorder(names, Overall), y=Overall)) +
+        geom_bar(stat="identity") +
+        coord_flip() + 
+        theme_classic()
+      ggsave(path = "./ML/models/", filename=paste(names(gene_list)[i], "_VarImp.pdf", sep=""), plot, height=3, width=3)
+        
+          
+      eval <- test[,colnames(test) %in% c(survival[i], genes)]
+      eval[] <- lapply(eval[], function(x) as.numeric(as.character(x)))
+      predictions <- predict(model, newdata = as.matrix(eval[,1:length]))
+      
+      results <- data.frame(actual = eval[,survival[i]], predict = predictions)
+      results <- results %>%
+        mutate(correct = ifelse(actual == predict, TRUE, FALSE))
+      plot <- ggplot(results, aes(x = predict, fill = correct)) +
+            geom_bar(position = "fill") + 
+            theme_classic()
+      ggsave(paste("./ML/models/", names(gene_list)[i], ".pdf", sep=""), plot, height=3, width=3)
+      
+       y <- confusionMatrix(predict(model, newdata = as.matrix(eval[,1:length])), reference = as.factor(eval[,survival[i]]))
+      row <- unlist(c(y$overall[c(1:4,6)], y$table[1], y$table[2], y$table[3], y$table[4], y$byClass[1:4], names(gene_list[j]), survival[i]))
+    out <- rbind(out,row) 
+    save(model, file = paste0(survival[i], "_", names(gene_list[j]), ".rda"))
+    }
+   
+}
+colnames(out) <- c("Accuracy", "Kappa", "Accur_low", "Accur_high", "Pvalue", "TP", "FN", "FP", "TN", "Sensitivity", "Specificity", "PPV", "NPV", "Celltype", "GeneSize")
+write.table(mat, file="./ML/models/model_summaries.txt", sep="\t",append=F, row.names = F)
+
+stopImplicitCluster()
+```
+
+```{r}
+library(skimr)
+skimmed <- skim_to_wide(trainData)
+skimmed[, c(1:5, 9:11, 13, 15:16)]
+```
+
+```{r}
+dfTPM$condition <- as.factor(dfTPM$condition)
+set.seed(123)
+index <- caret::createDataPartition(dfTPM$condition, p=0.5, list=F)
+
+
+```
+
+```{r}
+fs <- Boruta::Boruta(train$ ~ ., data=scale(train[]))
+fnames <- Boruta::getSelectedAttributes(fs)
+fnames
+```
+
+
+```{r}
+Btrain <- train[,colnames(train) %in% fnames]
+Btrain$condition <- train$condition
+```
+
+```{r}
+library(mlbench)
+library(caret)
+library(dplyr)
+
+control <- caret::trainControl(method="repeatedcv", number=10, repeats=128, selectionFunction = "best", savePredictions = T, classProbs = TRUE, summaryFunction = twoClassSummary)
+grid <- expand.grid(mtry = c(1:10))
+
+Model <- caret::train(train[,1:839], train$condition,
+                method='rf', 
+                preProcess = c("scale", "center"),
+                trControl=control, 
+                verbose=F)
+predictions <- predict(Model, test)
+results <- data.frame(actual = test$condition, predict = predictions)
+results <- results %>%
+            mutate(correct = ifelse(actual == predict, TRUE, FALSE))
+ggplot2::ggplot(results, aes(x = predict, fill = correct)) +
+            geom_bar(position = "fill") + 
+            theme_classic()
+
+ model_importance <- varImp(Model)
+ print(plot(model_importance))
+```
+```
+
