@@ -59,12 +59,13 @@ data$histological_grade <- ifelse(data$histological_grade == "GX" | data$histolo
 ```{r}
 ggplot(subset(data, !is.na(ajcc_pathologic_tumor_stage)), aes(x=ajcc_pathologic_tumor_stage, group=knn.pred, fill = knn.pred)) + 
     geom_bar(position = "fill") + 
-    theme_classic()
+    theme_classic() 
 ggsave("APCmodel_byStage.pdf", height=3, width=4)
 
 ggplot(subset(data, !is.na(histological_grade)), aes(x=histological_grade, group=knn.pred, fill = knn.pred)) + 
     geom_bar(position = "fill") + 
-    theme_classic()
+    theme_classic() + 
+    geom_text(aes(label=stat(count)), stat='count', position='fill')
 ggsave("APCmodel_byGrade.pdf", height=3, width=4)
 ```
 
@@ -130,7 +131,8 @@ ggsave("TCmodel_byStage.pdf", height=3, width=4)
 
 ggplot(subset(data, !is.na(histological_grade)), aes(x=histological_grade, group=knn.pred, fill = knn.pred)) + 
     geom_bar(position = "fill") + 
-    theme_classic()
+    theme_classic() + 
+    geom_text(aes(label=stat(count)), stat='count', position='fill')
 ggsave("TCmodel_byGrade.pdf", height=3, width=4)
 
 ```
