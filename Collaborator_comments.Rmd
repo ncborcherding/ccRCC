@@ -1,0 +1,19 @@
+---
+title: "Address_comments"
+author: "Nick Borcherding"
+date: "7/21/2020"
+output: html_document
+---
+
+```{r}
+cells <- integrated[[]]
+cells <- subset(cells, !is.na(cloneType))
+cells <- rownames(cells)
+subset <- subset(integrated, cells = cells)
+```
+
+```{r}
+VlnPlot(subset, features = "KLRB1", pt.size = F, assay = "RNA")
+ggsave("KLRB1_exspression_clonotypesOnly.pdf", height=3, width=5)
+```
+
