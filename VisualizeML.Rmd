@@ -255,14 +255,14 @@ GeneSet <- GeneSetCollection(T_genes, APC_genes)
 ```{r}
 library(GSVA)
 library(BiocParallel)
-data <- hpca$data
+data <- blueprint_encode$data
 ES <- gsva(data, GeneSet, method = 'ssgsea', 
             ssgsea.norm = TRUE,
            parallel.sz = 2)
 ```
 
 ```{r}
-ES <- rbind(ES, hpca$types, hpca$main_types)
+ES <- rbind(ES, blueprint_encode$types, blueprint_encode$main_types)
 ES <- as.data.frame(t(ES))
 colnames(ES)[3:4] <- c("minor", "major")
 
