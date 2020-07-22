@@ -115,6 +115,35 @@ mat$clusters <- rownames(table)
 write.table(mat, file = "APC_ProportionTest_stage.txt", col.names=NA, sep="\t",append=F)
 ```
 
+
+
+```{r}
+names <- colnames(data[,3:17])
+sub <- data[,colnames(data) %in% c(names, "knn.pred", "histological_grade")]
+sub2 <- reshape2::melt(sub, id.vars = "knn.pred")
+sub2 <- subset(sub2, variable != "histological_grade")
+
+ggplot(sub2, aes(x=as.factor(knn.pred), y=as.numeric(value))) + 
+    geom_violin(aes(fill = as.factor(knn.pred))) + 
+    geom_boxplot(width=0.5, outlier.alpha = 0) + 
+    facet_grid(.~variable) + 
+    scale_fill_manual(values = c("#666666", "#F05128")) +
+    theme_classic() + 
+    guides(fill = F)
+ggsave("TAM_3signatureTCGA_byPred.pdf", height=3, width=8)
+
+sub2 <- reshape2::melt(sub, id.vars = c("knn.pred", "histological_grade"))
+sub2 <- na.omit(sub2)
+ggplot(sub2, aes(x=as.factor(histological_grade), y=as.numeric(value))) + 
+    geom_violin(aes(fill = as.factor(knn.pred))) + 
+    geom_boxplot(width=0.5, outlier.alpha = 0) + 
+    facet_grid(knn.pred~variable) + 
+    scale_fill_manual(values = c("#666666", "#F05128")) +
+    theme_classic() + 
+    guides(fill = F)
+ggsave("TAM3_signatureTCGA_byPredandGrade.pdf", height=6, width=10)
+```
+
 ```{r}
 clinical <- updated_survival[,c("bcr_patient_barcode", "ajcc_pathologic_tumor_stage", "histological_grade", "treatment_outcome_first_course")]
 data <- merge(TC, clinical, by.x = "rnaseq_patients", by.y = "bcr_patient_barcode")
@@ -183,8 +212,85 @@ mat$clusters <- rownames(table)
 write.table(mat, file = "TC_ProportionTest_stage.txt", col.names=NA, sep="\t",append=F)
 ```
 
+```{r}
+names <- colnames(data[,3:17])
+sub <- data[,colnames(data) %in% c(names, "knn.pred", "histological_grade")]
+sub2 <- reshape2::melt(sub, id.vars = "knn.pred")
+sub2 <- subset(sub2, variable != "histological_grade")
+
+ggplot(sub2, aes(x=as.factor(knn.pred), y=as.numeric(value))) + 
+    geom_violin(aes(fill = as.factor(knn.pred))) + 
+    geom_boxplot(width=0.5, outlier.alpha = 0) + 
+    facet_grid(.~variable) + 
+    scale_fill_manual(values = c("#666666", "#F05128")) +
+    theme_classic() + 
+    guides(fill = F)
+ggsave("CD8_6signatureTCGA_byPred.pdf", height=3, width=8)
+
+sub2 <- reshape2::melt(sub, id.vars = c("knn.pred", "histological_grade"))
+sub2 <- na.omit(sub2)
+ggplot(sub2, aes(x=as.factor(histological_grade), y=as.numeric(value))) + 
+    geom_violin(aes(fill = as.factor(knn.pred))) + 
+    geom_boxplot(width=0.5, outlier.alpha = 0) + 
+    facet_grid(knn.pred~variable) + 
+    scale_fill_manual(values = c("#666666", "#F05128")) +
+    theme_classic() + 
+    guides(fill = F)
+ggsave("CD8_6signatureTCGA_byPredandGrade.pdf", height=6, width=10)
+```
 
 
+
+```{r}
+APC_genes <- colnames(APC[,3:17])
+T_genes <- colnames(TC[,3:17])
+
+library(GSEABase)
+APC_genes <- GeneSet(APC_genes, setName="APC_genes")
+T_genes <- GeneSet(T_genes, setName="T_genes")
+
+GeneSet <- GeneSetCollection(T_genes, APC_genes)
+```
+
+```{r}
+library(GSVA)
+library(BiocParallel)
+data <- hpca$data
+ES <- gsva(data, GeneSet, method = 'ssgsea', 
+            ssgsea.norm = TRUE,
+           parallel.sz = 2)
+```
+
+```{r}
+ES <- rbind(ES, hpca$types, hpca$main_types)
+ES <- as.data.frame(t(ES))
+colnames(ES)[3:4] <- c("minor", "major")
+
+
+```
+
+```{r setup, include=FALSE}
+colorblind_vector <- colorRampPalette(c("#FF4B20", "#FFB433", "#C6FDEC", "#7AC5FF", "#0348A6"))
+```
+
+```{r}
+library(dplyr)
+table <- ES %>%
+    group_by(major) %>%
+    summarise(med_T = median(as.numeric(T_genes)), med_A = median(as.numeric(APC_genes)))
+
+tiss <- c("Fibroblasts", "B_cell", "Epithelial_cells", "T_cells", "Macrophage", "DC", "Keratinocytes")
+table2 <- table[table$major %in% tiss,]
+nor <-function(x) { (x -min(x))/(max(x)-min(x))   }
+table2[,2:3] <- as.data.frame(lapply(table2[,2:3], nor))
+melt <- reshape2::melt(table2, id.vars = "major")
+
+ggplot(melt, aes(x = reorder(major, value), y=variable)) + 
+    geom_tile(aes(fill = value)) + 
+    coord_flip() + 
+    theme_classic() + 
+    scale_fill_gradientn(colors = rev(colorblind_vector(11)))
+```
 
 ### Generating Models
 
