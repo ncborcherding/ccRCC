@@ -276,16 +276,16 @@ colorblind_vector <- colorRampPalette(c("#FF4B20", "#FFB433", "#C6FDEC", "#7AC5F
 ```{r}
 library(dplyr)
 table <- ES %>%
-    group_by(major) %>%
+    group_by(minor) %>%
     summarise(med_T = median(as.numeric(T_genes)), med_A = median(as.numeric(APC_genes)))
 
 tiss <- c("Fibroblasts", "B_cell", "Epithelial_cells", "T_cells", "Macrophage", "DC", "Keratinocytes")
 table2 <- table[table$major %in% tiss,]
 nor <-function(x) { (x -min(x))/(max(x)-min(x))   }
 table2[,2:3] <- as.data.frame(lapply(table2[,2:3], nor))
-melt <- reshape2::melt(table2, id.vars = "major")
+melt <- reshape2::melt(table, id.vars = "minor")
 
-ggplot(melt, aes(x = reorder(major, value), y=variable)) + 
+ggplot(melt, aes(x = reorder(minor, value), y=variable)) + 
     geom_tile(aes(fill = value)) + 
     coord_flip() + 
     theme_classic() + 
