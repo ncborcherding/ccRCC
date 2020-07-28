@@ -252,6 +252,20 @@ T_genes <- GeneSet(T_genes, setName="T_genes")
 GeneSet <- GeneSetCollection(T_genes, APC_genes)
 ```
 
+
+```{r}
+APC2 <- APC[,c("rnaseq_patients", "knn.pred")]
+colnames(APC2)[2] <- "APC.pred"
+TC2 <- TC[,c("rnaseq_patients", "knn.pred")]
+colnames(TC2)[2] <- "TC.pred"
+merged <- merge(APC2, TC2, by = "rnaseq_patients")
+table(merged$APC.pred, merged$TC.pred)
+```
+
+
+
+
+
 ```{r}
 library(GSVA)
 library(BiocParallel)
@@ -260,6 +274,11 @@ ES <- gsva(data, GeneSet, method = 'ssgsea',
             ssgsea.norm = TRUE,
            parallel.sz = 2)
 ```
+
+
+
+
+
 
 ```{r}
 ES <- rbind(ES, blueprint_encode$types, blueprint_encode$main_types)
