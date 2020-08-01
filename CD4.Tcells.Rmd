@@ -4,7 +4,7 @@ author:
 - name: Nick Borcherding
   email: ncborch@gmail.com
   affiliation: Washington University in St. Louis, School of Medicine, St. Louis, MO, USA
-date: "June 25, 2020"
+date: "August, 1, 2020"
 output:
   BiocStyle::html_document:
     toc_float: true
@@ -46,7 +46,7 @@ colorblind_vector <- colorRampPalette(c("#FF4B20", "#FFB433", "#C6FDEC", "#7AC5F
 
 # Initial Subsetting and Analysis
 
-We will use the **Minor** variable in the integrated seurat object meta data that we defined in the integration step, filtering for the "CD5.T.Cell" and "Tregs". 
+We will use the **Minor** variable in the integrated Seurat object meta data that we defined in the integration step, filtering for the "CD5.T.Cell" and "Tregs". 
 
 ```{r}
 Tcells <- subset(integrated, Minor == "CD4.T.Cell" | Minor ==  "Treg")
@@ -54,17 +54,15 @@ Tcells <- NormalizeData(Tcells)
 rm(integrated)
 ```
 
-We are also going to create a subdirectory for all T cell analyses:
+We are also going to create a sub-directory for all T cell analyses:
 ```{r}
 dir.create("./DataAnalysis/CellType/CD4.Tcells")
 ```
 
-
-
-
 ## Reclustering 
 
-Isolating just the T cells, stripping the seurat object of non-"RNA" values using *DietSeurat()* and then spliting the object to create a list that can be fed into **SCTransform()**
+Isolating just the T cells, stripping the Seurat object of non-"RNA" values using *DietSeurat()* and then splitting the object to create a list that can be fed into **SCTransform()**
+
 ```{r eval=FALSE}
 Tcells@meta.data$Run <- paste0(Tcells@meta.data$sample, "_", Tcells@meta.data$type) #Define the sequence run
 Tcells[["percent.mt"]] <- PercentageFeatureSet(Tcells, pattern = "^MT-") #Calculate %mito
@@ -79,6 +77,7 @@ rm(Tcells)
 ```
 
 Integrating the data as above with the whole data set.
+
 ```{r eval = FALSE}
 options(future.globals.maxSize= 2621440000)
 features <- SelectIntegrationFeatures(object.list = T.list, nfeatures = 3000)
@@ -92,33 +91,8 @@ rm(T.anchors)
 saveRDS(Tcells, file = "./data/Processed/CD4.Tcells_Precluster.rds")
 ```
 
-Now we can process the intgreated T cells and identify clusters.
-```{r eval = FALSE}
-Tcells <- readRDS("./data/Processed/CD4.Tcells_Precluster.rds")
 
-
-dir.create("./DataAnalysis/CellType/CD4.Tcells/DimensionInputs")
-for (i in c(10,15,20,25,30,35,40)) {
-    
-    integrated2 <- ScaleData(object = Tcells, verbose = FALSE)
-    integrated2 <- RunPCA(object = integrated2, npcs = 40, verbose = FALSE)
-    integrated2 <- RunUMAP(object = integrated2, reduction = "pca", 
-        dims = 1:i) #dimensions for  UMAP
-    for (x in c(10,15,20,25,30,35,40)) { #Dimensions for neighbors
-       integrated2 <- FindNeighbors(object = integrated2, dims = 1:x)
-       for(y in c(0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1)) { #Resolution
-           integrated2 <- FindClusters(object = integrated2, resolution = y, force.recalc=T)
-           plot1 <- DimPlot(integrated2, reduction = "umap", pt.size = 0.5, group.by = "orig.ident")
-           ggsave(path = "./DataAnalysis/CellType/CD4.Tcells/DimensionInputs", file = paste("UMAP", i, "_Neighbors", x, "_resolution", y, "_OrigIdent.pdf", sep=""), plot1, width=4.25, height=3)
-           plot2 <- DimPlot(object = integrated2, reduction = 'umap', label = T) + NoLegend()
-            ggsave(path = "./DataAnalysis/CellType/CD4.Tcells/DimensionInputs", file = paste("UMAP", i, "_Neighbors", x, "_resolution", y, "_clusters.pdf", sep=""), plot2, width=3.5, height=3)
-       }
-    }
-}
-rm(integrated2)
-
-```
-
+Calculating the UMAP and finding clusters.
 
 ```{r eval = FALSE}
 Tcells <- ScaleData(object = Tcells, verbose = FALSE)
@@ -186,13 +160,13 @@ s.genes <- cc.genes$s.genes
 g2m.genes <- cc.genes$g2m.genes
 ```
 
-Now we can perform cell cycle scoring with the genes. For now, I am not going to regress using the assingments or save the integrated object with the calculations.
+Now we can perform cell cycle scoring with the genes. For now, I am not going to regress using the assignments or save the integrated object with the calculations.
 
 ```{r}
 Tcells <- CellCycleScoring(Tcells, s.features = s.genes, g2m.features = g2m.genes, set.ident = FALSE)
 ```
 
-Like above with the contribution by condition (**type**), we can now look at the phases assignments by cluster and condition. We do not need to scale if we seperate **type** into seperate bar graphs.
+Like above with the contribution by condition (**type**), we can now look at the phases assignments by cluster and condition. We do not need to scale if we separate **type** into separate bar graphs.
 
 ```{r}
 dir.create("./DataAnalysis/CellType/CD4.Tcells/CellCycle")
@@ -245,7 +219,7 @@ Here is a list I use in T cell identification, we can run these first and store 
 
 ```{r}
 genelist <- c("CD8a", "Cd8b1", "Cd4", "Cd3d", "Foxp3", "Il2ra", "Il7r", "Ccr7", "Ccl4", "Gata3", "Tbx21",  "Cd44", "Cd28", "Sell", "Fas", "Ctla4", "Pdcd1", "Icos", "Havcr2", "Entpd1", "Tigit", "Cd244", "Eomes", "Cd160", "Il10", "Smad3", "Klrg1", "Itga4", "Ifna1", "Ifng", "Cxcr3", "Ccr5", "Il12rb2", "Il18ra", "Il27a", "Stat1", "Stat4", "Ccr3", "Ccr4", "Ccr6", "Ccr10", "Ccr8", "Stat5", "Stat6", "Il4", "Il5", "Il6", "Il9", "Il10", "Il13", "Il17a", "Il17f", "Il21", "Il22", "Tgfbr2", "Ccl20", "Ccl22", "Rorgt", "Rora", "Rorc", "Stat3", "Tnfsf8", "Cxcr5", "Cxcr6", "Maf", "Bcl6", "Gzmb", "Prf1", "Ms4a4b", "Nfat", "Blimp1", "Batf", "Trgc1", "Trgc2", "Trdc", "Il23r", "Top2a", "Birc5", "Cxcl13", "Trac", "Trbc1", "Trbc2", "Cd52", "Nkg7", "Gapdh", "Igfbp4", "Nfkbia", "Ifi27l2a", "Tnfrsf4", "TCF7")
-genelist <- toupper(unique(genelist))
+genelist <- toupper(unique(genelist)) #Use toupper() to convert these to Human nomenclature
 
 
 dir.create("DataAnalysis/CellType/CD4.Tcells/markers")
@@ -273,6 +247,8 @@ All.markers <- FindAllMarkers(Tcells, assay = "RNA", pseudocount.use = 0.1, only
 write.table(All.markers, file = "DataAnalysis/CellType/CD4.Tcells/markers/FindAllMarkers_output.txt", col.names=NA, sep="\t",append=F)
 ```
 
+Graphing the top markers for each cluster onto the UMAP using schex from the above *FindAllMarkers()* call.
+
 ```{r}
 All.markers <- read.delim("./DataAnalysis/CellType/CD4.Tcells/markers/FindAllMarkers_output.txt")
 top10 <- All.markers %>% group_by(cluster) %>% top_n(n = 10, wt = avg_logFC)
@@ -287,6 +263,7 @@ for (i in seq_along(top10)) {
 }
 ```
 
+Graphing the top markers for each cluster using the *DotPlot()* function from the above *FindAllMarkers()* call.
 
 ```{r}
 top10 <- All.markers %>% group_by(cluster) %>% top_n(n = 10, wt = avg_logFC)
@@ -297,6 +274,7 @@ DotPlot(Tcells, features = unique(top10$gene)) + coord_flip() +
 ggsave(path = "DataAnalysis/CellType/CD4.Tcells/markers", file = "Top10_dotplot.eps", height=8, width=3)
 ```
 
+Here are some selected markers for T cell biology that are interesting that I also want to take a look at by cluster. 
 
 ```{r}
 genes <- c("CCR7", "LEF1", "SELL", "TCF7", "CD27", "CD28", "CD40LG", "CD44", "CD69", "IL2RA", "TFRC","TNFRSF4", "TNFRSF8", "CCL3", "CCL4","GZMA", "GZMB", "GZMK", "IFNG","NKG7", "PRF1", "CTLA4", "HAVCR2", "LAG3", "PDCD1", "TIGIT")
@@ -423,6 +401,8 @@ mat <- data.frame(markers)
 
 ## Visualizing the differential gene expression
 
+Here we are going to load the differential results from above into a list - marker_list and loop through the visualizations. 
+
 ```{r}
 
 file_list <- list.files("./DataAnalysis/CellType/CD4.Tcells/DGE/", pattern = ".txt")
@@ -441,7 +421,10 @@ names <- paste0(prefix, "_", suffix)
 names(marker_list) <- names #assign the cell type to each element of the list
 ```
 
-Going to make 2 different plots, the first will take the percent difference from Myocarditis versus healthy cells and place that delta on the x-axis with fold-change on the y-axis. The other graph will be the typical volcano plot. Gene labeling is based first on siginificance and then on the weight of fold-change + 4xDelta Percent. The latter is such that we want to find genes that are not only upregulated by good markers for myocarditis. 
+This loop will 
++  filter for significant genes that are upregulated or downregulated (not filtered by log-fold change).
++  select the top 20 genes will be selected based on the weight of log-fold change and 4*percent difference.
++  visualize the differential genes as 1) scatter plot with percent difference vs. log-fold change and 2) traditional volcano plot.
 
 ```{r}
 library(ggrepel)
@@ -483,10 +466,11 @@ ggsave(path = "DataAnalysis/CellType/CD4.Tcells/DGE/visualizations", file = past
 }
 ```
 
-
 ***
 
 # Trajectory
+
+Here we are going to use the embedding of the subclusters to generate a trajectory using the slingshot R package. Slingshot does not work directly with Seurat, so we will convert into the Bioconductor format, singlecellexperiment and then use slingshot.
 
 ```{r}
 library(slingshot)
@@ -496,6 +480,8 @@ sce <- as.SingleCellExperiment(Tcells)
 
 sds <- slingshot(Embeddings(Tcells, "umap"), clusterLabels = Tcells@active.ident, allow.breaks = TRUE, stretch = 0, reducedDim = "UMAP") #Calcualting the trajectory
 ```
+
+In order to visualize the UMAP with the computed trajectories overlaid, we need a quick function cell_pal and then can assign cluster colors by using the scales *hue_pal()* function.
 
 ```{r}
 library(scales)
@@ -524,6 +510,8 @@ lines(sds, lwd = 2, col = 'black')
 dev.off()
 ```
 
+We can also see the pseudotime variables across each of the curves. 
+
 ```{r}
 nc <- 2
 pt <- slingPseudotime(sds)
@@ -540,122 +528,28 @@ for (i in nms) {
 dev.off()
 ```
 
-## Using pseudotime to rank genes
-
-```{r}
-library(rsample)
-library(tidymodels)
-
-Tcells <- FindVariableFeatures(Tcells)
-
-# Get top 498 highly variable genes
-top_hvg <- HVFInfo(Tcells) %>% 
-  mutate(., bc = rownames(.)) %>% 
-  arrange(desc(variance)) %>% 
-  top_n(300, variance) %>% 
-  pull(bc)
-# Prepare data for random forest
-dat_use <- t(as.matrix(GetAssayData(Tcells, slot = "data"))[top_hvg,])
-dat_use_df <- cbind(slingPseudotime(sds)[,1], dat_use) # Do curve 2, so 2nd columnn
-colnames(dat_use_df)[1] <- "pseudotime"
-dat_use_df <- as.data.frame(dat_use_df[!is.na(dat_use_df[,1]),])
-
-
-dat_split <- initial_split(dat_use_df)
-dat_train <- training(dat_split)
-dat_val <- testing(dat_split)
-
-colnames(dat_train) <- stringr::str_replace(colnames(dat_train), "-", ".") #Replace dash with dots in gene names
-colnames(dat_val) <- stringr::str_replace(colnames(dat_val), "-", ".")
-
-#Performing random forest
-model <- rand_forest(mtry = 200, trees = 1400, min_n = 15, mode = "regression") %>%
-  set_engine("ranger", importance = "impurity", num.threads = 3) %>%
-  fit(pseudotime ~ ., data = dat_train) 
-
-#Getting top 200 genes by pseudotime
-var_imp <- sort(model$fit$variable.importance, decreasing = TRUE)
-top_genes <- names(var_imp)[1:200]
-top_genes <- gsub("\\.", "-", top_genes)
-
-output <- data.frame(model$fit$variable.importance)
-colnames(output) <- "Var.Imp"
-write.table(output, file = "DataAnalysis/CellType/CD4.Tcells/slingshot/VarImp_model.txt", col.names=NA, sep="\t",append=F)
-```
-
-```{r}
-output <- read.delim("./DataAnalysis/CellType/CD4.Tcells/slingshot/VarImp_model.txt")
-subset_out <- output %>% top_n(20, wt = Var.Imp)
-
-ggplot(subset_out, aes(x=reorder(X, Var.Imp), y=Var.Imp)) +
-    geom_bar(stat = "identity") + 
-    theme_classic() + 
-    coord_flip() + 
-    theme(axis.title.y = element_blank())
-ggsave("./DataAnalysis/CellType/CD4.Tcells/slingshot/top20_varImp_raw.pdf")
-
-subset_out$Var.Imp <- subset_out$Var.Imp/max(output$Var.Imp)
-
-ggplot(subset_out, aes(x=reorder(X, Var.Imp), y=Var.Imp)) +
-    geom_bar(stat = "identity") + 
-    theme_classic() + 
-    coord_flip() + 
-    theme(axis.title.y = element_blank())
-ggsave("./DataAnalysis/CellType/CD4.Tcells/slingshot/top20_varImp_scaled.pdf")
-```
-
-
-### Importance for T-cell-related genes 
-```{r}
-output <- read.delim("./DataAnalysis/CellType/CD4.Tcells/slingshot/VarImp_model.txt")
-genelist <- c("CD8a", "Cd8b1", "Cd4", "Cd3d", "Foxp3", "Il2ra", "Il7r", "Ccr7", "Ccl4", "Gata3", "Tbx21",  "Cd44", "Cd28", "Sell", "Fas", "Ctla4", "Pdcd1", "Icos", "Havcr2", "Entpd1", "Tigit", "Cd244", "Eomes", "Cd160", "Il10", "Smad3", "Klrg1", "Itga4", "Ifna1", "Ifng", "Cxcr3", "Ccr5", "Il12rb2", "Il18ra", "Il27a", "Stat1", "Stat4", "Ccr3", "Ccr4", "Ccr6", "Ccr10", "Ccr8", "Stat5", "Stat6", "Il4", "Il5", "Il6", "Il9", "Il10", "Il13", "Il17a", "Il17f", "Il21", "Il22", "Tgfbr2", "Ccl20", "Ccl22", "Rorgt", "Rora", "Rorc", "Stat3", "Tnfsf8", "Tnfrsf4", "Tnfrsf8","Ccl5", "Cxcr5", "Cxcr6", "Maf", "Bcl6", "Gzmb", "Prf1", "Ms4a4b", "Nfat", "Blimp1", "Batf","Il23r", "Top2a", "Birc5", "Cxcl13", "Nkg7", "Gapdh", "Nfkbia", "Igfbp4", "Cxcl2", "Cxcl14", "Ifngr1", "Cd28", "Cd3e", "Cd3g", "Cd52", "Lag3", "Junb", "Fox", "Ifi27l2a", "Ifitm3", "Gzma")
-genelist <- toupper(unique(genelist))
-
-subset_out <- subset(output, X %in% genelist)
-
-ggplot(subset_out, aes(x=reorder(X, Var.Imp), y=Var.Imp)) +
-    geom_bar(stat = "identity") + 
-    theme_classic() + 
-    coord_flip() + 
-    theme(axis.title.y = element_blank())
-ggsave("./DataAnalysis/CellType/CD4.Tcells/slingshot/Filtered_varImp_raw.pdf")
-
-subset_out$Var.Imp <- subset_out$Var.Imp/max(output$Var.Imp)
-
-ggplot(subset_out, aes(x=reorder(X, Var.Imp), y=Var.Imp)) +
-    geom_bar(stat = "identity") + 
-    theme_classic() + 
-    coord_flip() + 
-    theme(axis.title.y = element_blank())
-ggsave("./DataAnalysis/CellType/CD4.Tcells/slingshot/Filtered_varImp_scaled.pdf")
-```
-
-```{r}
-PT <- as.data.frame(slingPseudotime(sds))
-colnames(PT) <- c("PseudoT1", "PseudoT2" , "PseudoT3")
-Tcells <- AddMetaData(Tcells, PT)
-saveRDS(Tcells, file = "./data/Processed/CD4.Tcells_FullCluster.rds")
-Tcells <- readRDS("./data/Processed/CD4.Tcells_FullCluster.rds")
-```
-
 ***
 
-#Clonotype Analysis
+# Clonotype Analysis
+
+During the integration step, clonotypes have already been assigned across all T cells. We can take advantage of this using the [scRepertoire](https://github.com/ncborcherding/scRepertoire) package we wrote. 
 
 ```{r}
 library(scRepertoire)
 dir.create("./DataAnalysis/CellType/CD4.Tcells/clonotype")
 ```
 
+Using the clonotype groupings calculated in the integration step to view along the UMAP of the CD4+ T cells.
 
 ```{r}
 Tcells@meta.data$cloneType <- factor(Tcells@meta.data$cloneType, levels = c("Hyperexpanded (100 < X <= 500)", "Large (20 < X <= 100)", "Medium (5 < X <= 20)", "Small (1 < X <= 5)", "Single (0 < X <= 1)", NA))
+
 DimPlot(Tcells, group.by = "cloneType") + scale_color_manual(values = c(colorblind_vector(5)), na.value="grey")
 ggsave(path = "DataAnalysis/CellType/CD4.Tcells/clonotype", filename="IntegratedObject_byClonotypeFreq.eps", width=6.5, height=3)
 ```
 
 
-
+Now we can get a little more granularity on CD4+ T cells clonotype dynamics - I will isolate both all cells and the CD4+ T cells from the tumor-only. Run will be just the sequencing run - so 6 total P1_P, P1_T, etc
 
 ```{r}
 TumorOnly <- subset(Tcells, orig.ident == "P1" | orig.ident ==  "P2" | orig.ident ==  "P3")
@@ -664,15 +558,15 @@ TumorOnly  <- expression2List(TumorOnly,  group = "cluster")
 Run  <- expression2List(TumorOnly,  group = "Run")
 ```
 
+Please see the manuscript that outlines the [scRepertoire package](https://f1000research.com/articles/9-47/v2), these are just the basic visualizations. 
+
 ```{r}
 quantContig(CD4, cloneCall="gene+nt", scale = TRUE) + guides(fill = F)
 ggsave("DataAnalysis/CellType/CD4.Tcells/clonotype/UniqueClonotypes.pdf", height=2, width=2.5)
 
 quantContig(TumorOnly, cloneCall="gene+nt", scale = TRUE) + guides(fill = F)
 ggsave("DataAnalysis/CellType/CD4.Tcells/clonotype/UniqueClonotype_TumorOnlys.pdf", height=2, width=2.5)
-```
 
-```{r}
 compareClonotypes(CD4, numbers = 15, 
                     cloneCall="gene+nt", graph = "alluvial")
 ggsave("DataAnalysis/CellType/CD4.Tcells/clonotype/Alluvial_compare.pdf", height=4, width=20)
@@ -680,9 +574,7 @@ ggsave("DataAnalysis/CellType/CD4.Tcells/clonotype/Alluvial_compare.pdf", height
 compareClonotypes(TumorOnly, numbers = 15, 
                     cloneCall="gene+nt", graph = "alluvial")
 ggsave("DataAnalysis/CellType/CD4.Tcells/clonotype/Alluvial_compare_TumorOnly.pdf", height=4, width=20)
-```
 
-```{r}
 clonalHomeostasis(CD4, cloneCall = "gene+nt")
 ggsave("DataAnalysis/CellType/CD4.Tcells/clonotype/Clonal_homeostasis.pdf", height=2, width=5)
 
@@ -706,17 +598,13 @@ ggsave("DataAnalysis/CellType/CD4.Tcells/clonotype/Clonal_overlap_morisita_Tumor
 
 clonalOverlap(TumorOnly, cloneCall = "gene+nt", method = "overlap")
 ggsave("DataAnalysis/CellType/CD4.Tcells/clonotype/Clonal_overlap_overlap_TumorOnly.pdf", height=3, width=4)
-```
 
-```{r}
 clonalDiversity(CD4, cloneCall = "gene+nt", group = "samples")
 ggsave("DataAnalysis/CellType/CD4.Tcells/clonotype/Clonal_Diversity.pdf", height=3, width=4)
 
 clonalDiversity(TumorOnly, cloneCall = "gene+nt", group = "samples")
 ggsave("DataAnalysis/CellType/CD4.Tcells/clonotype/Clonal_Diversity_TumorOnly.pdf", height=3, width=4)
-```
 
-```{r}
 alluvialClonotypes(Tcells, cloneCall = "gene", 
                    y.axes = c("Frequency", "type", "newCluster"), 
                    color = "newCluster") 
@@ -727,10 +615,7 @@ alluvialClonotypes(TumorOnly, cloneCall = "gene",
                    y.axes = c("Frequency", "type", "newCluster"), 
                    color = "newCluster") 
 ggsave("DataAnalysis/CellType/CD4.Tcells/clonotype/Clonal_Alluvial_TumorOnly.pdf", height=3, width=5)
-```
 
-
-```{r}
 quantContig(Run, cloneCall = "gene+nt", scale = T)
 ggsave("DataAnalysis/CellType/CD4.Tcells/clonotype/PtUnique_TumorOnly.pdf", height=3, width=5)
 
@@ -757,58 +642,17 @@ ggsave("DataAnalysis/CellType/CD4.Tcells/clonotype/PT_OVERLAP.pdf", height=4, wi
 
 ***
 
-#ssGSEA
+# ssGSEA
+
+Setting up the directory and loading the escape R package. This is a package we built for single-cell GSEA analysis - can find it on [GitHub](https://github.com/ncborcherding/escape) and has been accepted for Biocondutor.
 
 ```{r}
 dir.create("./DataAnalysis/CellType/CD4.Tcells/GSEA")
 library(escape)
-GS <- getGeneSets(library = c("H", "C5"))
-ES <- enrichIt(obj = Tcells, gene.sets = GS, groups = 1000, cores = 4)
-save(ES, file = "./DataAnalysis/CellType/CD4.Tcells/GSEA/HC5_enrichment.rda")
 ```
 
 
-```{r}
-load("./DataAnalysis/CellType/CD4.Tcells/GSEA/HC5_enrichment.rda")
-meta <- Tcells[[]]
-meta <- merge(meta, ES, by = "row.names")
-names <- colnames(ES)
-type_sig <- getSignificance(meta[,c("type",names)], group = "type")
-cluster_sig <- getSignificance(meta[,c("newCluster",names)], group = "newCluster")
-clonotype_sig <- getSignificance(na.omit(meta[,c("cloneType",names)]), group = "cloneType")
-colnames(clonotype_sig)[1:5] <- gsub("\\..*", "", colnames(clonotype_sig)[1:5])
-
-write.table(type_sig , file = "DataAnalysis/CellType/CD4.Tcells/GSEA/lmfit_byType.txt", col.names=NA, sep="\t",append=F)
-write.table(cluster_sig, file = "DataAnalysis/CellType/CD4.Tcells/GSEA/lmfit_byCluster.txt", col.names=NA, sep="\t",append=F)
-write.table(clonotype_sig, file = "DataAnalysis/CellType/CD4.Tcells/GSEA/lmfit_byCloneType.txt", col.names=NA, sep="\t",append=F)
-```
-
-
-```{r}
-top10 <- cluster_sig %>% top_n(10, wt=F)
-top10 <- rownames(top10)
-
-for (i in seq_along(top10)){
-  ridgeEnrichment(meta, gene.set = top10[i], group = "newCluster", add.rug = TRUE) + facet_grid(.~type)
-  ggsave(path = "DataAnalysis/CellType/CD4.Tcells/GSEA/", file = paste0("Ridge_ClusterTop10_TypevsCluster_", top10[i], ".pdf"), height=3, width=5)
-}
-
-for (i in seq_along(top10)){
-  ridgeEnrichment(meta, gene.set = top10[i], group = "newCluster", add.rug = TRUE) 
-  ggsave(path = "DataAnalysis/CellType/CD4.Tcells/GSEA/", file = paste0("Ridge_ClusterTop10_Cluster_", top10[i], ".pdf"), height=3, width=5)
-}
-
-
-top10 <- type_sig %>% top_n(10, wt=F)
-top10 <- rownames(top10)
-for (i in seq_along(top10)){
-  ridgeEnrichment(meta, gene.set = top10[i], group = "type", add.rug = TRUE)
-  ggsave(path = "DataAnalysis/CellType/CD4.Tcells/GSEA/", file = paste0("Ridge_ClusterTop10_Type_", top10[i], ".pdf"), height=3, width=5)
-}
-
-
-```
-
+Here we can load a delimited text document with columns consisting of list of genes to be formed into gene sets. The loop will separate each column into a list, remove empty and duplicated values and convert each into a gene set using the GSEABase R package. 
 
 ```{r}
 sign <- read.delim("./data/immune_sign.txt")[,1:20]
@@ -828,20 +672,34 @@ for (i in seq_along(unique)) {
 list <- GSEABase::GeneSetCollection(list)
 ```
 
+
+Next we perform the actual ssGSEA step using the *enrichIt()* function, separating the single-cells into groups of 1000.
+
 ```{r}
 ES2 <- enrichIt(obj = Tcells, gene.sets = list, groups = 1000, cores = 2)
 save(ES2, file = "./DataAnalysis/CellType/CD8.Tcells/GSEA/Requested_enrichment.rda")
-
-
 ```
+
+I am also interested in using more established gene sets, so I am going to do the same thing with the Hallmark and C5 library from the from the [Molecular Signature Database](https://www.gsea-msigdb.org/gsea/index.jsp).
+
+```{r}
+GS <- getGeneSets(library = c("H", "C5"))
+ES <- enrichIt(obj = Tcells, gene.sets = GS, groups = 1000, cores = 4)
+save(ES, file = "./DataAnalysis/CellType/CD4.Tcells/GSEA/H_C5_enrichment.rda")
+```
+
+
+We can take the output of *enrichIt()* and either *AddMetaData()* or just merge, chose merge here so the meta data does not get too busy. I isolate just the hallmark pathways and bind with our selected pathways.
 
 ```{r}
 ES2 <- get(load("./DataAnalysis/CellType/CD4.Tcells/GSEA/Requested_enrichment.rda"))
-filter <- ES[,grepl("HALLMARK",colnames(ES))]
+filter <- ES[,grepl("HALLMARK",colnames(ES))] #Isolate only Hallmark Pathways
 filter <- cbind(filter,ES2)
 meta <- Tcells[[]]
 meta <- merge(meta, filter, by = "row.names")
 ```
+
+Next we can take the values and get the median values per cluster to display in a heatmap.
 
 ```{r}
 heatmap <- meta[, c("newCluster", colnames(filter))]

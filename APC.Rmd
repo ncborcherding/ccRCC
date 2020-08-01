@@ -4,7 +4,7 @@ author:
 - name: Nick Borcherding
   email: ncborch@gmail.com
   affiliation: Washington University in St. Louis, School of Medicine, St. Louis, MO, USA
-date: "June 25, 2020"
+date: "August 1, 2020"
 output:
   BiocStyle::html_document:
     toc_float: true
@@ -58,7 +58,7 @@ APC <- NormalizeData(APC)
 rm(integrated)
 ```
 
-We are also going to create a subdirectory for all T cell analyses:
+We are also going to create a sub-directory for all T cell analyses:
 ```{r}
 dir.create("./DataAnalysis/CellType/APC")
 ```
@@ -74,13 +74,13 @@ s.genes <- cc.genes$s.genes
 g2m.genes <- cc.genes$g2m.genes
 ```
 
-Now we can perform cell cycle scoring with the genes. For now, I am not going to regress using the assingments or save the integrated object with the calculations.
+Now we can perform cell cycle scoring with the genes. For now, I am not going to regress using the assignments or save the integrated object with the calculations.
 
 ```{r}
 APC <- CellCycleScoring(APC, s.features = s.genes, g2m.features = g2m.genes, set.ident = FALSE)
 ```
 
-Like above with the contribution by condition (**type**), we can now look at the phases assignments by cluster and condition. We do not need to scale if we seperate **type** into seperate bar graphs.
+Like above with the contribution by condition (**type**), we can now look at the phases assignments by cluster and condition. We do not need to scale if we separate **type** into separate bar graphs.
 
 ```{r}
 dir.create("./DataAnalysis/CellType/APC/CellCycle")
@@ -122,7 +122,7 @@ ggsave(path = "./DataAnalysis/CellType/APC/CellCycle", filename="CellCycle_UMAP_
 
 ## Reclustering 
 
-Isolating just the T cells, stripping the seurat object of non-"RNA" values using *DietSeurat()* and then spliting the object to create a list that can be fed into **SCTransform()**
+Isolating just the T cells, stripping the Seurat object of non-"RNA" values using *DietSeurat()* and then splitting the object to create a list that can be fed into **SCTransform()**
 ```{r eval=FALSE}
 APC@meta.data$Run <- paste0(APC@meta.data$sample, "_", APC@meta.data$type) #Define the sequence run
 APC[["percent.mt"]] <- PercentageFeatureSet(APC, pattern = "^MT-") #Calculate %mito
@@ -137,6 +137,7 @@ rm(APC)
 ```
 
 Integrating the data as above with the whole data set.
+
 ```{r eval = FALSE}
 options(future.globals.maxSize= 2621440000)
 features <- SelectIntegrationFeatures(object.list = T.list, nfeatures = 3000)
@@ -150,36 +151,7 @@ rm(T.anchors)
 saveRDS(APC, file = "./data/Processed/APC_Precluster.rds")
 ```
 
-Now we can process the intgreated T cells and identify clusters.
-```{r eval = FALSE}
-APC <- readRDS("./data/Processed/APC_Precluster.rds")
-
-dir.create("./DataAnalysis/CellType/APC/DimensionInputs")
-for (i in c(10,15,20,25,30,35,40)) {
-    
-    integrated2 <- ScaleData(object = APC, verbose = FALSE)
-    integrated2 <- RunPCA(object = integrated2, npcs = 40, verbose = FALSE)
-    integrated2 <- RunUMAP(object = integrated2, reduction = "pca", 
-        dims = 1:i) #dimensions for  UMAP
-    for (x in c(10,15,20,25,30,35,40)) { #Dimensions for neighbors
-       integrated2 <- FindNeighbors(object = integrated2, dims = 1:x)
-       for(y in c(0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1)) { #Resolution
-           integrated2 <- FindClusters(object = integrated2, resolution = y, force.recalc=T)
-           plot1 <- DimPlot(integrated2, reduction = "umap", pt.size = 0.5, group.by = "orig.ident")
-           ggsave(path = "./DataAnalysis/CellType/APC/DimensionInputs", file = paste("UMAP", i, "_Neighbors", x, "_resolution", y, "_OrigIdent.pdf", sep=""), plot1, width=4.25, height=3)
-           plot2 <- DimPlot(object = integrated2, reduction = 'umap', label = T) + NoLegend()
-            ggsave(path = "./DataAnalysis/CellType/APC/DimensionInputs", file = paste("UMAP", i, "_Neighbors", x, "_resolution", y, "_clusters.pdf", sep=""), plot2, width=3.5, height=3)
-       }
-    }
-}
-rm(integrated2)
-
-```
-
-Based on the review of the output above, we have selected the following parameters:
-+  UMAP 30
-+  Neighbors 35
-+  Resolution = 0.5
+Now we can process the integrated APC cells and identify clusters. Calculating the UMAP and finding clusters.
 
 ```{r eval = FALSE}
 APC <- ScaleData(object = APC, verbose = FALSE)
@@ -192,7 +164,7 @@ APC <- FindClusters(object = APC, resolution = 0.8, force.recalc=T)
 
 # Subclustering Analysis
 
-After the analysis below - Cluster 5 is principly composed of CD3+ T cells. I am going to use the cellselector function in Seurat to remove this cluster and rename the identities.
+After the analysis below - Cluster 5 is principally composed of CD3+ T cells. I am going to use the cellselector function in Seurat to remove this cluster and rename the identities.
 ```{r, eval = F}
 plot <- DimPlot(APC, reduction = "umap")
 sc5.cells <- CellSelector(plot=plot)
@@ -200,6 +172,8 @@ APC <- subset(APC, cells = sc5.cells, invert = TRUE)
 APC <- subset(APC, idents = 5, invert = TRUE)
 APC <- subset(APC, idents = 20, invert = T)
 ```
+
+Manually changing the names of the cluster based on the removal above. 
 
 ```{r}
 APC <- RenameIdents(object = APC, '6' = '5', 
@@ -220,6 +194,7 @@ APC <- RenameIdents(object = APC, '6' = '5',
 ```
 
 ## Visualizing New Clusters
+
 ```{r}
 APC@meta.data$newCluster <- APC@active.ident
 APC@active.ident <- factor(APC@active.ident, levels = c(0:20))
@@ -284,7 +259,7 @@ ggsave(path = "DataAnalysis/CellType/APC/", file = "totalContribution_byClusterT
 ```
 
 
-## Expression Markers in T cells
+## Expression Markers in APCs
 
 Like above we also want to look at the expression markers that define clusters and T cell subtypes. First we will make the schex-based reductions. 
 
@@ -293,7 +268,7 @@ suppressPackageStartupMessages(library(schex))
 APC <- make_hexbin(APC, 40, dimension_reduction = "UMAP")
 ```
 
-Here is a list I use in T cell identification, we can run these first and store them in the selected folder.
+Here is a list I use in APC identification, we can run these first and store them in the selected folder.
 
 ```{r}
 genelist <- read.delim("./data/immune_sign.txt")
@@ -327,6 +302,8 @@ All.markers <- FindAllMarkers(APC, assay = "RNA", pseudocount.use = 0.1, only.po
 write.table(All.markers, file = "DataAnalysis/CellType/APC/markers/FindAllMarkers_output.txt", col.names=NA, sep="\t",append=F)
 ```
 
+Graphing the top markers for each cluster onto the UMAP using schex from the above *FindAllMarkers()* call.
+
 ```{r}
 All.markers <- read.delim("./DataAnalysis/CellType/APC/markers/FindAllMarkers_output.txt")
 top10 <- All.markers %>% group_by(cluster) %>% top_n(n = 10, wt = avg_logFC)
@@ -341,6 +318,7 @@ for (i in seq_along(top10)) {
 }
 ```
 
+Graphing the top markers for each cluster using the *DotPlot()* function from the above *FindAllMarkers()* call.
 
 ```{r}
 top10 <- All.markers %>% group_by(cluster) %>% top_n(n = 10, wt = avg_logFC)
@@ -352,6 +330,8 @@ ggsave(path = "DataAnalysis/CellType/APC/markers", file = "Top10_dotplot.eps", h
 ```
 
 ## Correlating Markers with SingleR Output
+
+Unlike the the T cell subsets, there is a lot more variability within myeloid cells, thus we are redoing the singler analysis.
 
 ```{r}
 library(SingleR)
@@ -368,7 +348,6 @@ singler$seurat = Average
 ```
 
 ```{r}
-
 library(pheatmap)
 library(Rfast)
 SingleR.DrawHeatmap2 = function(SingleR,cells.use = NULL, types.use = NULL,
@@ -449,6 +428,8 @@ SingleR.DrawHeatmap2 = function(SingleR,cells.use = NULL, types.use = NULL,
 }
 ```
 
+Now we can graph the results by cluster using the newer **SingleR.DrawHeatmap2()** function. There are two data sets in singleR for mice - the first, refereed to #####. There are also two major outputs by cohort *SingleR.single.main* refers to results reduced across cell types, while *SingleR.single* offers finer granularity for cell subtypes.
+
 ```{r}
 dir.create("./DataAnalysis/CellType/APC/SingleR/")
 pdf("./DataAnalysis/CellType/APC/SingleR/CellTypes_complex2.pdf")
@@ -459,8 +440,6 @@ dev.off()
 pdf("./DataAnalysis/CellType/APC/SingleR/CellTypes_complex1.pdf")
 SingleR.DrawHeatmap2(singler$singler[[1]]$SingleR.single, top.n = 50, clusters = singler$singler[[1]]$SingleR.single$cell.names, order.by.clusters = F, normalize = T)
 dev.off()
-
-
 ```
 
 
@@ -505,16 +484,16 @@ for (i in seq_along(unique)) {
 }
 ```
 
+# ssGSEA for antigen presentaty
 
+Setting up the directory and loading the escape R package. This is a package we built for single-cell GSEA analysis - can find it on [GitHub](https://github.com/ncborcherding/escape) and has been accepted for Bioconductor.
 
 ```{r}
 GS <- getGeneSets(library = c("C5"))
 MHC <- which(grepl("MHC", names(GS)))
 GS2 <- GS[MHC]
 ES <- enrichIt(obj = APC, gene.sets = GS2, groups = 1000, cores = 2)
-```
 
-```{r}
 meta <- APC[[]]
 meta <- merge(meta, ES, by = "row.names")
 meta <- meta[,c("newCluster", names(GS2))]
@@ -532,8 +511,6 @@ pdf("./DataAnalysis/CellType/APC/CellType_proportion_byTypeMHC_heatmap.pdf", hei
 pheatmap::pheatmap(t(matrix[-16,]), color = rev(colorblind_vector(50)), scale = "row", fontsize_row = 3, cluster_rows = T, cluster_cols = T)
 dev.off()
 ```
-
-
 
 ***
 
@@ -577,8 +554,6 @@ mat <- data.frame(markers)
                 sep="\t",append=F, row.names = FALSE)
 ```
 
-
-
 ## Comparing peripheral blood of patients to peripheral blood of normal healthy
 
 ```{r}
@@ -599,6 +574,8 @@ mat <- data.frame(markers)
 
 ## Visualizing the differential gene expression
 
+Here we are going to load the differential results from above into a list - marker_list and loop through the visualizations. 
+
 ```{r}
 
 file_list <- list.files("./DataAnalysis/CellType/APC/DGE/", pattern = ".txt")
@@ -617,7 +594,10 @@ names <- paste0(prefix, "_", suffix)
 names(marker_list) <- names #assign the cell type to each element of the list
 ```
 
-Going to make 2 different plots, the first will take the percent difference from Myocarditis versus healthy cells and place that delta on the x-axis with fold-change on the y-axis. The other graph will be the typical volcano plot. Gene labeling is based first on siginificance and then on the weight of fold-change + 4xDelta Percent. The latter is such that we want to find genes that are not only upregulated by good markers for myocarditis. 
+This loop will 
++  filter for significant genes that are upregulated or downregulated (not filtered by log-fold change).
++  select the top 20 genes will be selected based on the weight of log-fold change and 4*percent difference.
++  visualize the differential genes as 1) scatter plot with percent difference vs. log-fold change and 2) traditional volcano plot.
 
 ```{r}
 library(ggrepel)
@@ -663,13 +643,14 @@ ggsave(path = "DataAnalysis/CellType/APC/DGE/visualizations", file = paste0("Vol
 
 # Only Macrophasges
 
+With the elevated tumor-associated macrophages, we can do further analysis just focusing on them.
+
 ```{r}
 Macro <- subset(APC, Assignment == "Macrophage")
 plot <- DimPlot(Macro, reduction = "umap")
 outliers <- CellSelector(plot=plot)
 Macro <- subset(Macro, cells = outliers, invert = TRUE)
 saveRDS(Macro, file = "./data/Processed/Macrophage_FullCluster.rds")
-APC <-  readRDS("./data/Processed/APC_FullCluster.rds")
 ```
 
 
@@ -683,16 +664,14 @@ DimPlot(object = Macro, reduction = 'umap', label = T) + NoLegend() +
 ggsave("DataAnalysis/CellType/APC/Macrophage/UMAP_byCluster.eps", width=3.5, height=3)
 ```
 
-We can also look at the top markers for each cluster by using the *FindAllMarkers()* call.
+We can also look at the top markers for each cluster by using the *FindAllMarkers()* call. Similar to the APC code above, we are going to look at top markers for the clusters.
 
 ```{r}
 dir.create("DataAnalysis/CellType/APC/Macrophage/markers/")
 Macro <- NormalizeData(Macro)
 All.markers <- FindAllMarkers(Macro, assay = "RNA", pseudocount.use = 0.1, only.pos = T) 
 write.table(All.markers, file = "DataAnalysis/CellType/APC/Macrophage/markers/FindAllMarkers_output.txt", col.names=NA, sep="\t",append=F)
-```
 
-```{r}
 All.markers <- read.delim("./DataAnalysis/CellType/APC/Macrophage/markers/FindAllMarkers_output.txt")
 
 suppressPackageStartupMessages(library(schex))
@@ -708,19 +687,14 @@ for (i in seq_along(top10)) {
                 scale_fill_gradientn(colors = rev(colorblind_vector(13))) 
         ggsave(path = "DataAnalysis/CellType/APC/Macrophage/markers/TopClusterMarkers", file = paste0("Top10markers", "_", top10[i], "_prop.pdf"), plot, height=3, width=3.25)
 }
-```
 
-
-```{r}
 top10 <- All.markers %>% group_by(cluster) %>% top_n(n = 10, wt = avg_logFC)
 DotPlot(Macro, features = unique(top10$gene)) + coord_flip() + 
     scale_color_gradientn(colors = rev(colorblind_vector(11))) + 
     guides(color = F, size = F) +
     scale_size(range = c(0.5,3.5))
 ggsave(path = "DataAnalysis/CellType/APC/Macrophage/markers", file = "Top10_dotplot.eps", height=10, width=3)
-```
 
-```{r}
 select <- c("FCGR1A", "CD68", "CD36", "TFRC", "CD20", "MRC1", "ANPEP", "MSR1", "IL3RA", "ITGAM", "CD40", "SLAMF7", "CD3D", "PDCD1LG2", "NRP1", "CD82", "PDCD1", "IFNGR1", "CD7", "CD4", "FCGR2", "FCGR3A", "CD14", "CD163", "SIGLEC1", "CD86", "CD81", "C5AR1", "ICAM1", "HLA-A", "HLA-B", "HLA-C", "HLA-DRA", "HLA-DRB1")
 
 
@@ -739,6 +713,7 @@ ggsave(path = "DataAnalysis/CellType/APC/Macrophage/markers", file = "Selected_d
 ```
 
 
+# ssGSEA for TAMs
 
 ```{r}
 dir.create("./DataAnalysis/CellType/APC/Macrophage/GSEA")
@@ -768,17 +743,11 @@ list <- GSEABase::GeneSetCollection(list)
 
 ES2 <- enrichIt(obj = Macro, gene.sets = list, groups = 1000, cores = 4)
 save(ES2, file = "./DataAnalysis/CellType/APC/Macrophage/GSEA/Requested_enrichment.rda")
-```
 
-
-
-```{r}
 filter <- cbind(ES,ES2)
 meta <- Macro[[]]
 meta <- merge(meta, filter, by = "row.names")
-```
 
-```{r}
 heatmap <- meta[, c("newCluster", colnames(filter))]
 melted <- reshape2::melt(heatmap, id.vars = c("newCluster"))
 meanvalues <- melted %>%
@@ -801,6 +770,7 @@ pheatmap::pheatmap(t(sub[c(4,5,1,2,3),]), color = rev(colorblind_vector(50)), sc
 dev.off()
 ```
 
+Examining the proportion of clusters by ccRCC.
 ```{r}
 
 freq_table <- meta[,c("orig.ident", "newCluster")]
@@ -816,6 +786,17 @@ ggplot(freq_table, aes(x=newCluster, y=Prop, fill = orig.ident)) +
          geom_bar(stat="identity", position = "fill") + 
   theme_classic()
 ggsave("./DataAnalysis/CellType/APC/Macrophage/patientBreakdown.pdf")
+
+freq_table <- table(Macro@active.ident, Macro$type)
+
+ggplot(as.data.frame(freq_table), aes(x=as.factor(Var1), y=Freq, fill=Var2)) + 
+  geom_bar(stat="identity", position="fill", color="black", lwd=0.25) + 
+  theme(axis.title.x = element_blank()) + 
+   scale_fill_manual(values=rev(colorblind_vector(3))) + 
+  theme_classic() + 
+    xlab("Clusters") + 
+    coord_flip() 
+ggsave(path = "DataAnalysis/CellType/APC/", file = "Macro_relativeContribution_byClusterType_unscaled.pdf", height=5, width=5)
 ```
 
 
@@ -877,27 +858,7 @@ dev.off()
 ```
 
 
-```{r}
-freq_table <- table(Macro@active.ident, Macro$type)
 
-ggplot(as.data.frame(freq_table), aes(x=as.factor(Var1), y=Freq, fill=Var2)) + 
-  geom_bar(stat="identity", position="fill", color="black", lwd=0.25) + 
-  theme(axis.title.x = element_blank()) + 
-   scale_fill_manual(values=rev(colorblind_vector(3))) + 
-  theme_classic() + 
-    xlab("Clusters") + 
-    coord_flip() 
-ggsave(path = "DataAnalysis/CellType/APC/", file = "Macro_relativeContribution_byClusterType_unscaled.pdf", height=5, width=5)
-```
 
-***
 
-```{r}
-Macro <- NormalizeData(Macro)
-markers <- FindAllMarkers(Macro, logfc = 0.0, min.pct = 0, pseudocount.use = 0.1, only.pos = TRUE)
-
-  
-write.table(markers, file="./DataAnalysis/CellType/APC/Macrophage/FindAllMarkers.txt",
-                sep="\t",append=F, row.names = FALSE)
-```
 

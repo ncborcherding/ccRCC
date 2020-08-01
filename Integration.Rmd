@@ -4,7 +4,7 @@ author:
 - name: Nick Borcherding
   email: ncborch@gmail.com
   affiliation: Washington University in St. Louis, School of Medicine, St. Louis, MO, USA
-date: "June 25, 2020"
+date: "August 1, 2020"
 output:
   BiocStyle::html_document:
     toc_float: true
@@ -46,7 +46,8 @@ N1_P <- CreateSeuratObject(N1_P)
 
 ## Peripheral and Tumor Immune Cell Populations from ccRCC
 
-We will perform the same process for the renal tumor samples, loading both the patient peripheral (P) and tumor-infiltrating (T), immune populations
+We will perform the same process for the renal tumor samples, loading both the patient peripheral (P) and tumor-infiltrating (T), immune populations.
+
 ```{r}
 P1_P <- Read10X("data/ccRCC/GU0700/Peripheral/")
 colnames(x = P1_P) <- paste('P1_P', colnames(x = P1_P), sep = '_')
@@ -78,11 +79,6 @@ colnames(x = P3_T) <- paste('P3_T', colnames(x = P3_T), sep = '_')
 colnames(x = P3_T) <- stringr::str_remove(colnames(x = P3_T), "-1")
 P3_T <- CreateSeuratObject(P3_T)
 ```
-## Whole kidney Single-cell RNA sequencing 
-This study ([link to accession](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE131685)) has single-cell sequencing of both renal tissue and immune cells from 3 healthy donors
-
-*Summary:*	**A comprehensive cellular anatomy of normal human kidney is crucial to address the cellular origins of renal disease and renal cancer. Some kidney diseases may be cell type-specific, especially renal tubular cells. To investigate the classification and transcriptomic information of human kidney, we performed a method to obtain single-cell suspension of kidney rapidly, and conducted single-cell RNA sequencing (scRNA-seq). We present scRNA-seq data of 23,366 high quality cells from human kidneys of 3 donors. In this dataset, we show 10 clusters of normal human renal cells. Due to the high quality of single cell transcriptomic information, proximal tubule (PT) cells were classified into 3 subtypes and collecting ducts cells into 2 subtypes. Collectively, our data will provide a relixable reference for the studies of renal cell biology and kidney diseases.**
-
 
 ***
 
@@ -125,35 +121,7 @@ dir.create("data/Processed")
 saveRDS(integrated, file = "data/Processed/integrated_PreClustering.rds")
 ```
 
-The UMAP visualizations can be difficult to interpret, before I select my parameters, I like to run a long loops to test the various principal components and dimensions to select. This is not particularly elegant, but is better than assuming set dimensions of the vignettes. I am not going to include the folder below in the github repo - its about 800 graphs and not helpful beyond the initial steps. 
-
-```{r eval=FALSE}
-dir.create("DataAnalysis/DimensionInputs")
-for (i in c(10,15,20,25,30,35,40)) {
-    
-    integrated2 <- ScaleData(object = integrated, verbose = FALSE)
-    integrated2 <- RunPCA(object = integrated2, npcs = 40, verbose = FALSE)
-    integrated2 <- RunUMAP(object = integrated2, reduction = "pca", 
-        dims = 1:i) #dimensions for  UMAP
-    for (x in c(10,15,20,25,30,35,40)) { #Dimensions for neighbors
-       integrated2 <- FindNeighbors(object = integrated2, dims = 1:x)
-       for(y in c(0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1)) { #Resolution
-           integrated2 <- FindClusters(object = integrated2, resolution = y, force.recalc=T)
-           plot1 <- DimPlot(integrated2, reduction = "umap", pt.size = 0.5, group.by = "orig.ident")
-           ggsave(path = "DataAnalysis/DimensionInputs", file = paste("UMAP", i, "_Neighbors", x, "_resolution", y, "_OrigIdent.pdf", sep=""), plot1, width=4.25, height=3)
-           plot2 <- DimPlot(object = integrated2, reduction = 'umap', label = T) + NoLegend()
-            ggsave(path = "DataAnalysis/DimensionInputs", file = paste("UMAP", i, "_Neighbors", x, "_resolution", y, "_clusters.pdf", sep=""), plot2, width=3.5, height=3)
-       }
-    }
-}
-rm(integrated2)
-```
-
-Based on the review of the output, we will use the following parameters:
-
-+  UMAP 30
-+  Neighbors 40
-+  Resolution 0.8
+Calculating the UMAP and finding clusters.
 
 ```{r}
 integrated <- ScaleData(object = integrated, verbose = FALSE)
@@ -166,12 +134,15 @@ integrated <- FindClusters(object = integrated, resolution = 0.8, force.recalc=T
 
 dir.create("DataAnalysis/UMAP")
 update_geom_defaults("point", list(stroke=0.1))
-DimPlot(object = integrated, reduction = 'umap', label = T, ) + NoLegend()
+DimPlot(object = integrated, reduction = 'umap', label = T) + NoLegend()
 ggsave(path = "DataAnalysis/UMAP", filename="IntegratedObject_byCluster.eps", width=3.5, height=3)
 DimPlot(object = integrated, reduction = 'umap', group.by = "orig.ident") 
 ggsave(path = "DataAnalysis/UMAP", filename="IntegratedObject_byOrig.Ident.eps", width=3.75, height=3)
 ```
-Adding the type of cell (or the origin) where K is normal kidney parenychma, P is peripheral blood and T is Tumor
+
+
+Adding the type of cell (or the origin) where K is normal kidney parenychma, P is peripheral blood and T is Tumor.
+
 ```{r}
 x <- rownames(integrated[[]])
 x <- as.data.frame(stringr::str_split(x, "_", simplify = T))
@@ -187,6 +158,7 @@ ggsave(path = "DataAnalysis/UMAP", filename="IntegratedObject_byType.eps", width
 saveRDS(integrated, file = "data/Processed/integrated_Cluster.rds")
 ```
 
+Looking at the density of distribution for cell types.
 
 ```{r}
 a <- DimPlot(object = integrated, reduction = 'umap', split.by = "type", group.by = "type")  + NoLegend() + NoAxes() + facet_wrap(~type)
@@ -251,13 +223,12 @@ All.markers <- FindAllMarkers(integrated, assay = "RNA", pseudocount.use = 0.1, 
 write.table(All.markers, file = "./DataAnalysis/DGE/FindAllMarkers_output.txt", col.names=NA, sep="\t",append=F)
 ```
 
+Graphing markers from the differential genes.
 
 ```{r}
 suppressPackageStartupMessages(library(schex))
 integrated <- make_hexbin(integrated, 80, dimension_reduction = "UMAP")
-```
 
-```{r}
 All.markers <- read.delim("./DataAnalysis/DGE/FindAllMarkers_output.txt")
 top10 <- All.markers %>% group_by(cluster) %>% top_n(n = 10, wt = avg_logFC)
 top10 <- top10$gene #just want the IDs
@@ -276,7 +247,8 @@ for (i in seq_along(top10)) {
   }
 
 ```
-### Lineage Markers Provided in the Dropbox account
+
+### Lineage Marker
 
 #### Loading and organizing the markers
 
@@ -314,6 +286,7 @@ for (i in seq_along(marker_list)) {
     }
 }
 ```
+
 ## Method 2: Singler
 
 Singler is a very cool package: it uses large cohorts of isolated bulk sequencing to correlate with single-cell data and makes ID-ing the cell type really intuitive. It allegedly works with Seurat, but I am not the largest fan of its work, so I have made some customization to help.
@@ -444,13 +417,14 @@ dev.off()
 
 ## Method 3: Attaching TCR data
 
-A major issue in the differentiation of cell types is the difference between NK cells and T cells, with a lot of crossover between Th1/CTL expression in the latter. One clear way to differentiate is to use our VDJ seequencing data to identify clusters with prominant TCR recovery. From there, we can say these are more definitively T cells. 
+A major issue in the differentiation of cell types is the difference between NK cells and T cells, with a lot of crossover between Th1/CTL expression in the latter. One clear way to differentiate is to use our VDJ sequencing data to identify clusters with prominent TCR recovery. From there, we can say these are more definitively T cells. 
 
 ```{r}
 library(scRepertoire)
 ```
 
 ### Loading the VDJ data
+
 ```{r}
 P1_P_contigs <- read.csv("./data/VDJ/P_700_contigs.csv")
 P1_T_contigs <- read.csv("./data/VDJ/T_700_contigs.csv")
@@ -463,7 +437,7 @@ N1_P_contigs <- read.csv("./data/VDJ/vdj_v1_hs_pbmc_t_filtered_contig_annotation
 
 ### Matching the Seurat and Contig Barcodes
 
-New integration steps for Seurat have made this a little more tricky - the integration adds a _Number to the end of each sample in the Seurat object - we will need to remove this first.
+New integration steps for Seurat have made this a little more tricky - the integration adds a _Number to the end of each sample in the Seurat object - we will need to remove this first. 
 
 ```{r}
 list <- list(P1_P_contigs, P1_T_contigs, P2_P_contigs, P2_T_contigs, P3_P_contigs, P3_T_contigs, N1_P_contigs)
@@ -480,13 +454,11 @@ for (i in 1:6) {
 ```
 
 ### Organizing TCR data and adding to the Seurat meta data
+
 ```{r}
 combined <- combineTCR(list, samples = c("P1", "P1", "P2", "P2", "P3", "P3", "N1"), ID = c("P", "T", "P", "T", "P", "T", "P"), cells = "T-AB")
 integrated <- combineExpression(combined, integrated)
-```
 
-
-```{r}
 #Organizing the order of the factor cloneType
 integrated@meta.data$cloneType <- factor(integrated@meta.data$cloneType, levels = c("Hyperexpanded (100 < X <= 500)", "Large (20 < X <= 100)", "Medium (5 < X <= 20)", "Small (1 < X <= 5)", "Single (0 < X <= 1)", NA))
 update_geom_defaults("point", list(stroke=0.5))
@@ -528,7 +500,7 @@ Idents(integrated, cells = sc11.cells) <- 21
 
 ## Rerun some previous visualizations 
 
-Now we can regraph some of the previous visualization and write over the former versions with the newer cluster assignments. For instance, not only the major UMAP, but also the contirbutions to each cluster and the SingleR estimates.
+Now we can regraph some of the previous visualization and write over the former versions with the newer cluster assignments. For instance, not only the major UMAP, but also the contributions to each cluster and the SingleR estimates.
 
 ```{r}
 integrated@meta.data$Final_clusters <- Idents(integrated)
@@ -613,7 +585,7 @@ ggsave(path = "DataAnalysis/UMAP", filename="IntegratedObject_byType_faceted.eps
 
 ## Attaching the assignments
 
-In the data folder, there is a tab-deliminated document called ccRCC_cellAssign, which has the 25 clusters and the major and minor assignments by clusters. We cane take this document, merge with the meta data, and then attach is to the seurat object.
+In the data folder, there is a tab-delimited document called ccRCC_cellAssign, which has the 21 clusters and the major and minor assignments by clusters. We cane take this document, merge with the meta data, and then attach is to the Seurat object.
 
 ```{r}
 cellAssign <- read.delim("./data/ccRCC_cellAssign.txt")
@@ -652,6 +624,7 @@ integrated@meta.data$Run <- paste0(integrated@meta.data$sample, "_", integrated@
 table(integrated$Run)
 ```
 
+Getting the mean features by sequencing run
 ```{r}
 meta <- integrated[[]]
 meta %>%
@@ -659,12 +632,9 @@ meta %>%
   summarise(meanF = mean(nFeature_RNA)) 
 ```
 
+Visualizing the mean cell types by condition.
+
 ```{r}
-
-
-
-
-
 table <- meta %>%
     group_by(orig.ident, type, Minor) %>%
     summarise(n = n()) %>%
@@ -691,6 +661,8 @@ ggplot(table, aes(x=reorder(Minor, n), y=n)) +
 ggsave("DataAnalysis/UMAP/CellType_sum_byType.pdf", height=3, width=2)
 ```
 
+Calculating the significance of proportion cells by tissue type.
+
 ```{r}
 unique <- unique(meta$Minor)
 
@@ -698,17 +670,8 @@ for (i in seq_along(unique)) {
     tmp <- subset(table, Minor == unique[i])
     aov <- aov(tmp$freq~ tmp$type)
     print(summary(aov))
-    
 }
 ```
 
-```{r}
-
-integrated <- readRDS("./data/Processed/integrated_Cluster.rds")
-```
 
 
-```{r}
-meta <- integrated[[]]
-
-```
