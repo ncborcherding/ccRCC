@@ -89,6 +89,7 @@ Tcells <- IntegrateData(anchorset = T.anchors, normalization.method = "SCT", ver
 rm(T.list)
 rm(T.anchors)
 saveRDS(Tcells, file = "./data/Processed/CD4.Tcells_Precluster.rds")
+readRDS("./data/Processed/CD4.Tcells_Precluster.rds")
 ```
 
 
@@ -112,6 +113,9 @@ DimPlot(object = Tcells, reduction = 'umap', label = T) + NoLegend()
 ggsave(path = "./DataAnalysis/CellType/CD4.Tcells", filename="IntegratedObject_byCluster.eps", width=3.5, height=3)
 DimPlot(object = Tcells, reduction = 'umap', group.by = "type") 
 ggsave(path = "./DataAnalysis/CellType/CD4.Tcells", filename="IntegratedObject_byType.eps", width=3.75, height=3)
+
+DimPlot(object = Tcells, reduction = 'umap', group.by = "orig.ident") 
+ggsave(path = "./DataAnalysis/CellType/CD8.Tcells", filename="IntegratedObject_byOrigIdent.eps", width=3.75, height=3)
 ```
 
 Examining the relative proportion on the new clusters
