@@ -156,6 +156,7 @@ DimPlot(object = integrated, reduction = 'umap', group.by = "type")
 ggsave(path = "DataAnalysis/UMAP", filename="IntegratedObject_byType.eps", width=3.75, height=3)
 
 saveRDS(integrated, file = "data/Processed/integrated_Cluster.rds")
+integrated <- readRDS( "data/Processed/integrated_Cluster.rds")
 ```
 
 Looking at the density of distribution for cell types.
