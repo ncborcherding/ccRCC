@@ -160,6 +160,7 @@ APC <- RunUMAP(object = APC, reduction = "pca",
     dims = 1:40)
 APC <- FindNeighbors(object = APC, dims = 1:40, force.recalc = T)
 APC <- FindClusters(object = APC, resolution = 0.8, force.recalc=T)
+APC <- readRDS("./data/Processed/APC_FullCluster.rds")
 ```
 
 # Subclustering Analysis
