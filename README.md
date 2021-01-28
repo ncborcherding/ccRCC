@@ -12,4 +12,4 @@ Here we provide the processed data and code for single-cell mRNA and T-cell rece
 **Conclusions:** Using the SCRS gene expression, we found preferential prediction of clinical outcomes and pathological diseases by subcluster assignment. With further characterization and functional validation, our findings may reveal certain sub-populations of immune cells amenable to therapeutic intervention.
 
 ## Citation
-Under Review
+[Article](https://www.nature.com/articles/s42003-020-01625-6): Borcherding, N., Vishwakarma, A., Voigt, A.P. et al. Mapping the immune environment in clear cell renal carcinoma by single-cell genomics. Commun Biol 4, 122 (2021). https://doi.org/10.1038/s42003-020-01625-6. 
